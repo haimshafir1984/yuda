@@ -1,0 +1,21 @@
+{
+  "name": "yoda-courtyard-crm",
+  "private": true,
+  "version": "0.1.0",
+  "description": "POC - מערכת CRM עבור החצר של יודה",
+  "workspaces": ["server", "client"],
+  "scripts": {
+    "setup": "npm install && npm run db:migrate && npm run db:seed",
+    "dev": "concurrently -k -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w server && npm run build -w client",
+    "start": "npm run build && npm run start -w server",
+    "test": "npm run test -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
+    "db:migrate": "npm run db:migrate -w server",
+    "db:seed": "npm run db:seed -w server",
+    "db:reset": "npm run db:reset -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

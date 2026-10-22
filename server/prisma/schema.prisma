@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ערכי enum נשמרים כמחרוזות (SQLite) ומאומתים בשכבת השרת.
+
+model Member {
+  id                Int      @id @default(autoincrement()) // משמש גם כמספר חבר פנימי
+  firstName         String
+  lastName          String
+  gender            String? // MALE | FEMALE
+  phone             String
+  phoneNormalized   String // ספרות בלבד, לצורך חיפוש וזיהוי כפילויות
+  email             String?
+  nationalId        String?  @unique
+  birthYear         Int?
+  maritalStatus     String? // SINGLE | MARRIED | DIVORCED | WIDOWED | SEPARATED
+  nationalInsurance Boolean  @default(false)
+  preferredChannel  String   @default("SMS") // SMS | EMAIL
+  joinDate          DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  registrations Registration[]
+  restrictions  MemberRestriction[]
+
+  @@index([phoneNormalized])
+}
+
+model Workshop {
+  id                       Int      @id @default(autoincrement())
+  kind                     String // WORKSHOP | EVENT
+  name                     String
+  subtitle                 String?
+  description              String?
+  facilitator              String?
+  format                   String // SINGLE | MULTI
+  startTime                String? // HH:mm - ברירת מחדל למפגשים
+  endTime                  String?
+  isPaid                   Boolean  @default(false)
+  price                    Float?
+  nationalInsurance        Boolean  @default(false)
+  status                   String   @default("DRAFT") // DRAFT | PUBLISHED | ONGOING | FINISHED | CANCELLED
+  registrationOpen         Boolean  @default(true)
+  registrationRequired     Boolean  @default(true)
+  genderRestriction        String? // MALE | FEMALE
+  minAge                   Int?
+  maxAge                   Int?
+  requireNationalInsurance Boolean  @default(false)
+  summary                  String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  sessions      WorkshopSession[]
+  registrations Registration[]
+  restrictions  MemberRestriction[]
+  questions     WorkshopQuestion[]
+}
+
+model WorkshopSession {
+  id         Int      @id @default(autoincrement())
+  workshopId Int
+  date       DateTime
+  startTime  String?
+  endTime    String?
+  createdAt  DateTime @default(now())
+
+  workshop   Workshop     @relation(fields: [workshopId], references: [id])
+  attendance Attendance[]
+
+  @@index([workshopId, date])
+}
+
+model Registration {
+  id           Int       @id @default(autoincrement())
+  memberId     Int
+  workshopId   Int
+  status       String    @default("ACTIVE") // ACTIVE | CANCELLED
+  source       String    @default("ADMIN") // ADMIN | PUBLIC
+  registeredAt DateTime  @default(now())
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  member     Member               @relation(fields: [memberId], references: [id])
+  workshop   Workshop             @relation(fields: [workshopId], references: [id])
+  answers    RegistrationAnswer[]
+  attendance Attendance[]
+
+  @@index([memberId])
+  @@index([workshopId, status])
+  // בהגירה נוסף בנוסף אינדקס ייחודי חלקי: (memberId, workshopId) WHERE status = 'ACTIVE'
+}
+
+model Attendance {
+  id             Int      @id @default(autoincrement())
+  registrationId Int
+  sessionId      Int
+  status         String // PRESENT | ABSENT   (העדר רשומה = טרם סומן)
+  markedAt       DateTime @default(now())
+
+  registration Registration    @relation(fields: [registrationId], references: [id])
+  session      WorkshopSession @relation(fields: [sessionId], references: [id])
+
+  @@unique([registrationId, sessionId])
+  @@index([sessionId])
+}
+
+model MemberRestriction {
+  id         Int       @id @default(autoincrement())
+  memberId   Int
+  workshopId Int? // null = חסימה כללית
+  reason     String?
+  createdAt  DateTime  @default(now())
+  removedAt  DateTime? // הסרה לוגית, לשמירת היסטוריה
+
+  member   Member    @relation(fields: [memberId], references: [id])
+  workshop Workshop? @relation(fields: [workshopId], references: [id])
+
+  @@index([memberId, removedAt])
+}
+
+model WorkshopQuestion {
+  id         Int     @id @default(autoincrement())
+  workshopId Int
+  text       String
+  type       String // TEXT | SINGLE_CHOICE
+  required   Boolean @default(false)
+  sortOrder  Int     @default(0)
+
+  workshop Workshop             @relation(fields: [workshopId], references: [id])
+  options  QuestionOption[]
+  answers  RegistrationAnswer[]
+
+  @@index([workshopId])
+}
+
+model QuestionOption {
+  id         Int    @id @default(autoincrement())
+  questionId Int
+  label      String
+  sortOrder  Int    @default(0)
+
+  question WorkshopQuestion     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers  RegistrationAnswer[]
+}
+
+model RegistrationAnswer {
+  id             Int     @id @default(autoincrement())
+  registrationId Int
+  questionId     Int
+  textValue      String?
+  optionId       Int?
+
+  registration Registration     @relation(fields: [registrationId], references: [id])
+  question     WorkshopQuestion @relation(fields: [questionId], references: [id])
+  option       QuestionOption?  @relation(fields: [optionId], references: [id])
+
+  @@unique([registrationId, questionId])
+}
