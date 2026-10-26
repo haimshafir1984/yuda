@@ -4,16 +4,18 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAction } from '../../components/toast';
 import {
-  Badge, Button, Card, Checkbox, Column, ConfirmDialog, DataTable, Dialog, EmptyState, ErrorBlock, Field, InlineAlert, Input, Ltr, Select, Spinner, Textarea,
+  Badge, Button, Card, Checkbox, Column, ConfirmDialog, DataTable, Dialog, EmptyState, ErrorBlock, Field, InlineAlert, Input, Ltr, Select, Spinner,
 } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
 import { fmtDate, fmtDateTime, fmtTimeRange } from '../../lib/format';
+import QuestionInput, { AnswerValue, QuestionDef, isMissing, toAnswerInput } from '../../components/QuestionInput';
+import { questionTypeLabel } from '../../lib/format';
 import { useDebounced } from '../../lib/hooks';
 import type { AnswerInput, AttendanceStatus, MemberRow, Paged, Question, RegistrantRow, RegistrationDetails, SessionAttendance, SessionRow, Workshop } from '../../lib/types';
 
 // ======================= שאלות הרשמה =======================
 
-interface QForm { id?: number; text: string; type: 'TEXT' | 'SINGLE_CHOICE'; required: boolean; options: { id?: number; label: string }[]; answerCount: number }
+interface QForm { id?: number; text: string; type: 'TEXT' | 'SINGLE_CHOICE' | 'MULTI_CHOICE'; required: boolean; options: { id?: number; label: string }[]; answerCount: number }
 const emptyQ = (): QForm => ({ text: '', type: 'TEXT', required: false, options: [{ label: '' }, { label: '' }], answerCount: 0 });
 
 export function QuestionsTab({ workshop }: { workshop: Workshop }) {
@@ -24,7 +26,7 @@ export function QuestionsTab({ workshop }: { workshop: Workshop }) {
 
   const saveQ = useAction(
     (f: QForm) => {
-      const body = { text: f.text, type: f.type, required: f.required, options: f.type === 'SINGLE_CHOICE' ? f.options : [] };
+      const body = { text: f.text, type: f.type, required: f.required, options: f.type !== 'TEXT' ? f.options : [] };
       return f.id ? api.put(`/questions/${f.id}`, body) : api.post(`/workshops/${workshop.id}/questions`, body);
     },
     {
@@ -43,7 +45,7 @@ export function QuestionsTab({ workshop }: { workshop: Workshop }) {
     if (!form) return;
     const e: Record<string, string> = {};
     if (!form.text.trim()) e.text = 'נוסח השאלה הוא שדה חובה';
-    if (form.type === 'SINGLE_CHOICE') {
+    if (form.type !== 'TEXT') {
       const labels = form.options.map((o) => o.label.trim()).filter(Boolean);
       if (labels.length < 2) e.options = 'שאלת בחירה דורשת לפחות שתי אפשרויות';
     }
@@ -54,7 +56,7 @@ export function QuestionsTab({ workshop }: { workshop: Workshop }) {
 
   const columns: Column<Question>[] = [
     { key: 'text', header: 'נוסח השאלה', cell: (r) => <span className="font-medium">{r.text}</span> },
-    { key: 'type', header: 'סוג', cell: (r) => (r.type === 'TEXT' ? 'טקסט חופשי' : 'בחירה יחידה') },
+    { key: 'type', header: 'סוג', cell: (r) => questionTypeLabel[r.type] },
     { key: 'req', header: 'חובה', cell: (r) => (r.required ? <Badge tone="amber">חובה</Badge> : 'לא') },
     { key: 'opts', header: 'אפשרויות', cell: (r) => (r.options.length ? r.options.map((o) => o.label).join(' | ') : '—') },
     { key: 'ans', header: 'תשובות שנמסרו', cell: (r) => r.answerCount },
@@ -105,14 +107,15 @@ export function QuestionsTab({ workshop }: { workshop: Workshop }) {
               <Field label="סוג השדה" hint={form.answerCount > 0 ? 'לא ניתן לשנות סוג לאחר שנמסרו תשובות' : undefined}>
                 <Select value={form.type} disabled={form.answerCount > 0} onChange={(e) => setForm({ ...form, type: e.target.value as QForm['type'] })}>
                   <option value="TEXT">טקסט חופשי</option>
-                  <option value="SINGLE_CHOICE">בחירה יחידה מתוך רשימה</option>
+                  <option value="SINGLE_CHOICE">{questionTypeLabel.SINGLE_CHOICE}</option>
+                  <option value="MULTI_CHOICE">{questionTypeLabel.MULTI_CHOICE}</option>
                 </Select>
               </Field>
               <div className="flex items-end pb-2">
                 <Checkbox label="שאלת חובה" checked={form.required} onChange={(c) => setForm({ ...form, required: c })} />
               </div>
             </div>
-            {form.type === 'SINGLE_CHOICE' && (
+            {form.type !== 'TEXT' && (
               <fieldset>
                 <legend className="mb-1 text-sm font-medium text-slate-700">אפשרויות תשובה</legend>
                 <div className="space-y-2">
@@ -155,7 +158,7 @@ function AddRegistrantDialog({ workshop, open, onClose }: { workshop: Workshop; 
   const [member, setMember] = useState<MemberRow | null>(null);
   const [checking, setChecking] = useState(false);
   const [blocked, setBlocked] = useState<string | null>(null);
-  const [answers, setAnswers] = useState<Record<number, { text: string; optionId: number | null }>>({});
+  const [answers, setAnswers] = useState<Record<number, AnswerValue>>({});
   const [qErrors, setQErrors] = useState<Record<number, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -170,7 +173,7 @@ function AddRegistrantDialog({ workshop, open, onClose }: { workshop: Workshop; 
 
   const register = useAction(
     () => {
-      const payload: AnswerInput[] = (questions.data ?? []).map((qq) => ({ questionId: qq.id, textValue: answers[qq.id]?.text ?? '', optionId: answers[qq.id]?.optionId ?? null }));
+      const payload: AnswerInput[] = (questions.data ?? []).map((qq) => toAnswerInput(qq as QuestionDef, answers[qq.id]));
       return api.post(`/workshops/${workshop.id}/registrations`, { memberId: member!.id, answers: payload });
     },
     {
@@ -201,7 +204,7 @@ function AddRegistrantDialog({ workshop, open, onClose }: { workshop: Workshop; 
     const errs: Record<number, string> = {};
     for (const qq of questions.data ?? []) {
       const a = answers[qq.id];
-      if (qq.required && (qq.type === 'TEXT' ? !a?.text.trim() : !a?.optionId)) errs[qq.id] = 'שאלת חובה';
+      if (isMissing(qq as QuestionDef, a)) errs[qq.id] = 'שאלת חובה';
     }
     setQErrors(errs);
     setSubmitError(null);
@@ -236,16 +239,7 @@ function AddRegistrantDialog({ workshop, open, onClose }: { workshop: Workshop; 
           </InlineAlert>
           {(questions.data ?? []).length > 0 && <h3 className="font-semibold text-slate-900">שאלות הרשמה</h3>}
           {(questions.data ?? []).map((qq) => (
-            <Field key={qq.id} label={qq.text} required={qq.required} error={qErrors[qq.id]}>
-              {qq.type === 'TEXT' ? (
-                <Textarea className="min-h-16" value={answers[qq.id]?.text ?? ''} onChange={(e) => { setAnswers({ ...answers, [qq.id]: { text: e.target.value, optionId: null } }); setQErrors({ ...qErrors, [qq.id]: '' }); }} />
-              ) : (
-                <Select value={answers[qq.id]?.optionId ?? ''} onChange={(e) => { setAnswers({ ...answers, [qq.id]: { text: '', optionId: e.target.value ? Number(e.target.value) : null } }); setQErrors({ ...qErrors, [qq.id]: '' }); }}>
-                  <option value="">בחירה...</option>
-                  {qq.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </Select>
-              )}
-            </Field>
+            <QuestionInput key={qq.id} q={qq as QuestionDef} value={answers[qq.id]} error={qErrors[qq.id]} onChange={(v) => { setAnswers({ ...answers, [qq.id]: v }); setQErrors({ ...qErrors, [qq.id]: '' }); }} />
           ))}
           {submitError && <InlineAlert tone="red">{submitError}</InlineAlert>}
           <div className="flex gap-2">

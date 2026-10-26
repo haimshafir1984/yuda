@@ -8,7 +8,7 @@ import { api } from '../../lib/api';
 import { channelLabel, fmtDate, fmtTenure, genderLabel, maritalLabel } from '../../lib/format';
 import type { Member } from '../../lib/types';
 import MemberForm, { fromMember } from './MemberForm';
-import { ActivityTab, ExceptionsTab, PreferencesTab, RestrictionsTab } from './MemberTabs';
+import { ActivityTab, ExceptionsTab, LedgerTab, PreferencesTab, RestrictionsTab, SocialServicesTab } from './MemberTabs';
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -69,9 +69,9 @@ export default function MemberCard() {
     { value: 'intake', label: 'פרטי קבלה', future: true },
     { value: 'activity', label: 'פעילות קבוצתית' },
     ...(m.nationalInsurance ? [{ value: 'ni', label: 'ביטוח לאומי', future: true }] : []),
-    { value: 'social', label: 'שירותים סוציאליים', future: true },
+    { value: 'social', label: 'שירותים סוציאליים' },
     { value: 'family', label: 'קשר משפחתי', future: true },
-    { value: 'ledger', label: 'כרטסת', future: true },
+    { value: 'ledger', label: 'כרטסת' },
     { value: 'prefs', label: 'העדפות' },
     { value: 'restrictions', label: 'הגבלות' },
     { value: 'exceptions', label: 'חריגות' },
@@ -123,13 +123,13 @@ export default function MemberCard() {
           <FutureNotice title="ביטוח לאומי" text="מודול זה יפותח בשלב הבא" />
         </TabsContent>
         <TabsContent value="social">
-          <FutureNotice title="שירותים סוציאליים" text="בפיתוח עתידי" />
+          <SocialServicesTab member={m} />
         </TabsContent>
         <TabsContent value="family">
           <FutureNotice title="קשר משפחתי" text="בפיתוח עתידי" />
         </TabsContent>
         <TabsContent value="ledger">
-          <FutureNotice title="כרטסת" text="בפיתוח עתידי" />
+          <LedgerTab memberId={m.id} />
         </TabsContent>
         <TabsContent value="prefs">
           <PreferencesTab member={m} />

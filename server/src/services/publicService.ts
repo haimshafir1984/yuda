@@ -6,9 +6,19 @@ import { AnswerInput, assertCanRegister, registerMember } from './registrationSe
 
 /**
  * דף הרישום הציבורי הוא הדגמה בלבד: הזדהות לפי טלפון אינה אימות זהות.
- * לכן אף תשובה כאן אינה חושפת פרטים אישיים של חבר, ואין בו ביטול או עריכה.
+ * לפי מסמך הדרישות מוצגת הודעה ייעודית לכל סיבת דחייה, אך ללא פרטים אישיים:
+ * ההודעה אינה כוללת גיל, נתוני כרטיס או הסיבה הפנימית של הגבלה.
  */
-const GENERIC_BLOCK = 'לא ניתן להשלים את ההרשמה באמצעות דף זה. אנא פנו למשרד הארגון.';
+export const DEFAULT_MESSAGES = {
+  NOT_A_MEMBER: 'ההרשמה בדף זה מיועדת לחברי הארגון בלבד. ניתן לפנות למשרד להצטרפות.',
+  ALREADY_REGISTERED: 'את/ה כבר רשום/ה לפעילות זו, ואין צורך להירשם שוב.',
+  NOT_ELIGIBLE: 'לצערנו הפעילות אינה מתאימה לך לפי הקריטריונים שהוגדרו. לשאלות ניתן לפנות למשרד.',
+  RESTRICTED: 'קיימת הגבלת רישום על חשבונך, ולכן לא ניתן להירשם דרך האתר. אנא פנו למשרד הארגון.',
+  NO_SHOW_BLOCK: 'לא ניתן להירשם כעת עקב אי-הגעה ללא ביטול מראש למספר פעילויות בחצי השנה האחרונה. אנא פנו למשרד הארגון.',
+  AMBIGUOUS: 'לא ניתן להשלים את ההרשמה באמצעות דף זה. אנא פנו למשרד הארגון.',
+  COMPLETED: 'ההרשמה התקבלה בהצלחה. אנחנו שומרים לך מקום (הדגמת POC בלבד).',
+  CLOSED: 'ההרשמה סגורה.',
+};
 
 export async function getPublicWorkshop(id: number) {
   const w = await prisma.workshop.findUnique({
@@ -26,7 +36,7 @@ export async function getPublicWorkshop(id: number) {
       w.status === 'CANCELLED' ? 'הפעילות בוטלה'
       : w.status === 'FINISHED' ? 'הפעילות הסתיימה'
       : w.status === 'DRAFT' ? 'הפעילות טרם פורסמה'
-      : 'ההרשמה סגורה';
+      : w.closedMessage ?? DEFAULT_MESSAGES.CLOSED;
   }
   return {
     id: w.id,
@@ -41,7 +51,9 @@ export async function getPublicWorkshop(id: number) {
     sessionCount: w.sessions.length,
     isPaid: w.isPaid,
     price: w.price,
-    registrationRequired: w.registrationRequired,
+    priceType: w.priceType,
+    registrationRequired: w.registrationMode === 'REQUIRED',
+    registrationMode: w.registrationMode,
     registrationOpen: open,
     closedReason,
     questions: w.questions.map((q) => ({
@@ -58,18 +70,35 @@ async function findMemberByPhone(phone: string) {
   const normalized = normalizePhone(phone);
   if (normalized.length < 9) throw new AppError(400, 'VALIDATION', 'מספר טלפון לא תקין');
   const members = await prisma.member.findMany({ where: { phoneNormalized: normalized }, select: { id: true } });
-  if (members.length === 0) throw new AppError(404, 'NOT_A_MEMBER', 'ההרשמה בדף זה מיועדת לחברי הארגון בלבד. ניתן לפנות למשרד להצטרפות.');
-  if (members.length > 1) throw new AppError(409, 'BLOCKED', GENERIC_BLOCK);
+  if (members.length === 0) throw new AppError(404, 'NOT_A_MEMBER', DEFAULT_MESSAGES.NOT_A_MEMBER);
+  if (members.length > 1) throw new AppError(409, 'BLOCKED', DEFAULT_MESSAGES.AMBIGUOUS);
   return members[0].id;
 }
 
-/** מסתיר פרטים אישיים: רק שגיאות ברמת הסדנה או שאלות מוצגות כפי שהן */
+/** ממפה כל סיבת דחייה להודעה ייעודית, בלי לחשוף פרטים אישיים */
 const sanitize = (e: unknown): never => {
-  if (e instanceof AppError) {
-    if (e.code === 'REGISTRATION_CLOSED' || e.code === 'ANSWERS_INVALID' || e.code === 'WORKSHOP_NOT_FOUND') throw e;
-    throw new AppError(409, 'BLOCKED', GENERIC_BLOCK);
+  if (!(e instanceof AppError)) throw e;
+  switch (e.code) {
+    case 'ANSWERS_INVALID':
+    case 'WORKSHOP_NOT_FOUND':
+      throw e;
+    case 'REGISTRATION_CLOSED': {
+      const custom = (e.details as { customMessage?: string | null } | undefined)?.customMessage;
+      throw new AppError(e.status, e.code, custom ?? e.message);
+    }
+    case 'ALREADY_REGISTERED':
+      throw new AppError(409, 'ALREADY_REGISTERED', DEFAULT_MESSAGES.ALREADY_REGISTERED);
+    case 'NOT_ELIGIBLE': {
+      const custom = (e.details as { customMessage?: string | null } | undefined)?.customMessage;
+      throw new AppError(422, 'NOT_ELIGIBLE', custom ?? DEFAULT_MESSAGES.NOT_ELIGIBLE);
+    }
+    case 'RESTRICTED':
+      throw new AppError(403, 'RESTRICTED', DEFAULT_MESSAGES.RESTRICTED);
+    case 'NO_SHOW_BLOCK':
+      throw new AppError(403, 'NO_SHOW_BLOCK', DEFAULT_MESSAGES.NO_SHOW_BLOCK);
+    default:
+      throw new AppError(409, 'BLOCKED', DEFAULT_MESSAGES.AMBIGUOUS);
   }
-  throw e;
 };
 
 export async function publicCheck(workshopId: number, phone: string) {
@@ -89,5 +118,6 @@ export async function publicRegister(workshopId: number, phone: string, answers:
   } catch (e) {
     sanitize(e);
   }
-  return { ok: true, message: 'ההרשמה התקבלה בהצלחה (הדגמת POC בלבד)' };
+  const w = await prisma.workshop.findUnique({ where: { id: workshopId }, select: { completionMessage: true } });
+  return { ok: true, message: w?.completionMessage ?? DEFAULT_MESSAGES.COMPLETED };
 }

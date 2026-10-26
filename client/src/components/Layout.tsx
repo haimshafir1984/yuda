@@ -1,11 +1,14 @@
 import clsx from 'clsx';
-import { CalendarDays, Menu, Settings, Users } from 'lucide-react';
+import { CalendarDays, ClipboardList, HeartHandshake, LifeBuoy, Menu, Settings, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 const NAV = [
   { to: '/members', label: 'חברים', icon: Users },
   { to: '/workshops', label: 'סדנאות ואירועים', icon: CalendarDays },
+  { to: '/treatments', label: 'ליווי טיפול פסיכולוגי (שפ"ח)', icon: HeartHandshake },
+  { to: '/requests', label: 'פניות ובקשות סיוע', icon: ClipboardList },
+  { to: '/social-work', label: 'ליווי עו"ס', icon: LifeBuoy },
   { to: '/settings', label: 'הגדרות', icon: Settings },
 ];
 

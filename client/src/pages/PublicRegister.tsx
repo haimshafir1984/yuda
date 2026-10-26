@@ -2,9 +2,10 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Badge, Button, Card, ErrorBlock, Field, InlineAlert, Input, Select, Spinner, Textarea } from '../components/ui';
+import QuestionInput, { AnswerValue, isMissing, toAnswerInput } from '../components/QuestionInput';
+import { Badge, Button, Card, ErrorBlock, Field, InlineAlert, Input, Spinner } from '../components/ui';
 import { api, ApiError } from '../lib/api';
-import { fmtDateRange, fmtMoney, fmtTimeRange, kindLabel } from '../lib/format';
+import { fmtDateRange, fmtMoney, fmtTimeRange, kindLabel, priceTypeLabel } from '../lib/format';
 import type { PublicWorkshop } from '../lib/types';
 
 /**
@@ -16,7 +17,8 @@ export default function PublicRegister() {
   const w = useQuery({ queryKey: ['public-workshop', id], queryFn: () => api.get<PublicWorkshop>(`/public/workshops/${id}`) });
   const [phone, setPhone] = useState('');
   const [step, setStep] = useState<'phone' | 'questions' | 'done'>('phone');
-  const [answers, setAnswers] = useState<Record<number, { text: string; optionId: number | null }>>({});
+  const [answers, setAnswers] = useState<Record<number, AnswerValue>>({});
+  const [doneMessage, setDoneMessage] = useState<string | null>(null);
   const [qErrors, setQErrors] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState('');
@@ -32,11 +34,11 @@ export default function PublicRegister() {
   });
   const submit = useMutation({
     mutationFn: () =>
-      api.post(`/public/workshops/${id}/register`, {
+      api.post<{ message: string }>(`/public/workshops/${id}/register`, {
         phone,
-        answers: (w.data?.questions ?? []).map((q) => ({ questionId: q.id, textValue: answers[q.id]?.text ?? '', optionId: answers[q.id]?.optionId ?? null })),
+        answers: (w.data?.questions ?? []).map((q) => toAnswerInput(q, answers[q.id])),
       }),
-    onSuccess: () => setStep('done'),
+    onSuccess: (res) => { setDoneMessage(res.message); setStep('done'); },
     onError: (e) => {
       if (e instanceof ApiError && e.code === 'ANSWERS_INVALID') setQErrors(e.details?.errors ?? {});
       else {
@@ -56,7 +58,7 @@ export default function PublicRegister() {
     const errs: Record<number, string> = {};
     for (const q of w.data?.questions ?? []) {
       const a = answers[q.id];
-      if (q.required && (q.type === 'TEXT' ? !a?.text.trim() : !a?.optionId)) errs[q.id] = 'שאלת חובה';
+      if (isMissing(q, a)) errs[q.id] = 'שאלת חובה';
     }
     setQErrors(errs);
     if (!Object.keys(errs).length) submit.mutate();
@@ -81,7 +83,7 @@ export default function PublicRegister() {
               <div><dt className="text-xs text-slate-500">תאריך</dt><dd>{fmtDateRange(w.data.startDate, w.data.endDate)}</dd></div>
               <div><dt className="text-xs text-slate-500">שעה</dt><dd>{fmtTimeRange(w.data.startTime, w.data.endTime)}</dd></div>
               {w.data.sessionCount > 1 && <div><dt className="text-xs text-slate-500">מספר מפגשים</dt><dd>{w.data.sessionCount}</dd></div>}
-              <div><dt className="text-xs text-slate-500">מחיר</dt><dd>{w.data.isPaid ? fmtMoney(w.data.price) : 'ללא תשלום'}</dd></div>
+              <div><dt className="text-xs text-slate-500">מחיר</dt><dd>{w.data.isPaid ? `${fmtMoney(w.data.price)}${w.data.priceType === 'MONTHLY' ? ` (${priceTypeLabel.MONTHLY})` : ''}` : 'ללא תשלום'}</dd></div>
               <div><dt className="text-xs text-slate-500">מצב הרשמה</dt><dd>{w.data.registrationOpen ? <Badge tone="green">ההרשמה פתוחה</Badge> : <Badge tone="red">{w.data.closedReason}</Badge>}</dd></div>
             </dl>
             {w.data.isPaid && <InlineAlert tone="blue">תשלום יתווסף בשלב הבא. ההרשמה בדף זה היא לצורך הדגמה בלבד, ולא מתבצע בה חיוב ואינה מסומנת כמשולמת.</InlineAlert>}
@@ -90,9 +92,9 @@ export default function PublicRegister() {
               <div role="status" className="flex flex-col items-center gap-2 py-4 text-center">
                 <CheckCircle2 className="size-10 text-emerald-600" aria-hidden />
                 <p className="text-lg font-semibold text-slate-900">ההרשמה התקבלה בהצלחה</p>
-                <p className="text-sm text-slate-600">ההרשמה נקלטה במערכת ה-CRM (הדגמת POC בלבד).</p>
+                <p className="text-sm text-slate-600">{doneMessage ?? 'ההרשמה נקלטה במערכת ה-CRM (הדגמת POC בלבד).'}</p>
               </div>
-            ) : !w.data.registrationRequired ? (
+            ) : w.data.registrationMode === 'NOT_NEEDED' ? (
               <InlineAlert tone="blue">אין צורך בהרשמה מראש לפעילות זו.</InlineAlert>
             ) : !w.data.registrationOpen ? (
               <InlineAlert tone="amber">לא ניתן להירשם כרגע: {w.data.closedReason}.</InlineAlert>
@@ -108,16 +110,7 @@ export default function PublicRegister() {
               <div className="space-y-4">
                 <h2 className="font-semibold text-slate-900">שאלות הרשמה</h2>
                 {w.data.questions.map((q) => (
-                  <Field key={q.id} label={q.text} required={q.required} error={qErrors[q.id]}>
-                    {q.type === 'TEXT' ? (
-                      <Textarea className="min-h-16" value={answers[q.id]?.text ?? ''} onChange={(e) => { setAnswers({ ...answers, [q.id]: { text: e.target.value, optionId: null } }); setQErrors({ ...qErrors, [q.id]: '' }); }} />
-                    ) : (
-                      <Select value={answers[q.id]?.optionId ?? ''} onChange={(e) => { setAnswers({ ...answers, [q.id]: { text: '', optionId: e.target.value ? Number(e.target.value) : null } }); setQErrors({ ...qErrors, [q.id]: '' }); }}>
-                        <option value="">בחירה...</option>
-                        {q.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                      </Select>
-                    )}
-                  </Field>
+                  <QuestionInput key={q.id} q={q} value={answers[q.id]} error={qErrors[q.id]} onChange={(v) => { setAnswers({ ...answers, [q.id]: v }); setQErrors({ ...qErrors, [q.id]: '' }); }} />
                 ))}
                 <div className="flex gap-2">
                   <Button variant="primary" loading={submit.isPending} onClick={onConfirm}>אישור הרשמה</Button>

@@ -5,7 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAction } from '../../components/toast';
 import { Badge, Button, Card, Checkbox, Dialog, ErrorBlock, Field, FutureNotice, InlineAlert, Input, PageHeader, Select, Spinner, Tabs, TabsContent, TabsList, Textarea } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
-import { fmtDateRange, fmtMoney, genderLabel, kindLabel, statusLabel } from '../../lib/format';
+import { fmtDateRange, fmtMoney, genderLabel, kindLabel, priceTypeLabel, registrationModeLabel, statusLabel } from '../../lib/format';
 import type { Workshop } from '../../lib/types';
 import { statusTone } from './WorkshopsList';
 import { AttendanceTab, QuestionsTab, RegistrantsTab, SessionsTab } from './WorkshopTabs';
@@ -16,7 +16,7 @@ function GeneralTab({ w }: { w: Workshop }) {
   const init = () => ({
     name: w.name, subtitle: w.subtitle ?? '', description: w.description ?? '', facilitator: w.facilitator ?? '',
     startDate: w.format === 'SINGLE' ? w.startDate ?? '' : '', startTime: w.startTime ?? '', endTime: w.endTime ?? '',
-    isPaid: w.isPaid, price: w.price == null ? '' : String(w.price), nationalInsurance: w.nationalInsurance,
+    isPaid: w.isPaid, price: w.price == null ? '' : String(w.price), priceType: w.priceType as string, nationalInsurance: w.nationalInsurance,
     status: w.status, registrationOpen: w.registrationOpen,
   });
   const [v, setV] = useState(init);
@@ -68,6 +68,9 @@ function GeneralTab({ w }: { w: Workshop }) {
             </Select>
           </Field>
           {v.isPaid && <Field label="מחיר בשקלים" required error={errors.price}><Input ltr type="number" min={0} step="0.01" value={v.price} onChange={(e) => set('price', e.target.value)} /></Field>}
+          {v.isPaid && w.format === 'MULTI' && (
+            <Field label="סוג המחיר"><Select value={v.priceType} onChange={(e) => set('priceType', e.target.value)}>{Object.entries(priceTypeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
+          )}
           <div className="hidden lg:block" />
           <Field label="סטטוס">
             <Select value={v.status} onChange={(e) => set('status', e.target.value as Workshop['status'])}>
@@ -86,9 +89,12 @@ function GeneralTab({ w }: { w: Workshop }) {
 }
 
 function RegistrationSettingsTab({ w }: { w: Workshop }) {
+  const all = useQuery({ queryKey: ['workshops', 'all'], queryFn: () => api.get<Workshop[]>('/workshops') });
   const init = () => ({
-    registrationOpen: w.registrationOpen, registrationRequired: w.registrationRequired, genderRestriction: w.genderRestriction ?? '',
-    minAge: w.minAge == null ? '' : String(w.minAge), maxAge: w.maxAge == null ? '' : String(w.maxAge), requireNationalInsurance: w.requireNationalInsurance,
+    registrationOpen: w.registrationOpen, registrationMode: w.registrationMode as string, autoCloseRegistration: w.autoCloseRegistration,
+    genderRestriction: w.genderRestriction ?? '', minAge: w.minAge == null ? '' : String(w.minAge), maxAge: w.maxAge == null ? '' : String(w.maxAge),
+    requireNationalInsurance: w.requireNationalInsurance, excludeId: w.excludeParticipantsOfWorkshopId == null ? '' : String(w.excludeParticipantsOfWorkshopId),
+    rejectMessage: w.rejectMessage ?? '', closedMessage: w.closedMessage ?? '', completionMessage: w.completionMessage ?? '',
   });
   const [v, setV] = useState(init);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -104,27 +110,55 @@ function RegistrationSettingsTab({ w }: { w: Workshop }) {
     if (v.minAge && v.maxAge && Number(v.minAge) > Number(v.maxAge)) e.maxAge = 'גיל מקסימלי קטן מהגיל המינימלי';
     setErrors(e);
     if (Object.keys(e).length) return;
-    mut.mutate({ ...v, minAge: v.minAge === '' ? null : Number(v.minAge), maxAge: v.maxAge === '' ? null : Number(v.maxAge) });
+    const { excludeId, ...rest } = v;
+    mut.mutate({ ...rest, minAge: v.minAge === '' ? null : Number(v.minAge), maxAge: v.maxAge === '' ? null : Number(v.maxAge), excludeParticipantsOfWorkshopId: excludeId === '' ? null : Number(excludeId) });
   };
+  const isEvent = w.kind === 'EVENT';
   return (
     <Card className="max-w-3xl p-5">
       <form noValidate onSubmit={(e) => { e.preventDefault(); if (!mut.isPending) submit(); }} className="space-y-5">
-        <div className="flex flex-wrap gap-6">
-          <Checkbox label="הרשמה פתוחה" checked={v.registrationOpen} onChange={(c) => set('registrationOpen', c)} />
-          <Checkbox label="נדרשת הרשמה מראש" checked={v.registrationRequired} onChange={(c) => set('registrationRequired', c)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="חובת רישום" hint={isEvent ? undefined : 'בסדנאות תמיד חובה להירשם'}>
+            {isEvent ? (
+              <Select value={v.registrationMode} onChange={(e) => set('registrationMode', e.target.value)}>
+                {Object.entries(registrationModeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </Select>
+            ) : (
+              <Input disabled readOnly value={registrationModeLabel.REQUIRED} />
+            )}
+          </Field>
+          <div className="flex flex-col justify-end gap-2 pb-2">
+            <Checkbox label="הרשמה פתוחה" checked={v.registrationOpen} onChange={(c) => set('registrationOpen', c)} />
+            {w.format === 'MULTI' && <Checkbox label="לסגור את הרישום אוטומטית עם תחילת הסדנה" checked={v.autoCloseRegistration} onChange={(c) => set('autoCloseRegistration', c)} />}
+          </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="הגבלה לפי מגדר">
-            <Select value={v.genderRestriction} onChange={(e) => set('genderRestriction', e.target.value)}>
+        <fieldset className="space-y-4 rounded-md border border-slate-200 p-4">
+          <legend className="px-1 text-sm font-medium text-slate-700">הגבלת משתתפים לפי קריטריון</legend>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="לפי מגדר">
+              <Select value={v.genderRestriction} onChange={(e) => set('genderRestriction', e.target.value)}>
+                <option value="">ללא הגבלה</option>
+                <option value="FEMALE">{genderLabel.FEMALE} בלבד</option>
+                <option value="MALE">{genderLabel.MALE} בלבד</option>
+              </Select>
+            </Field>
+            <Field label="גיל מינימלי" error={errors.minAge}><Input ltr type="number" min={0} max={120} value={v.minAge} onChange={(e) => set('minAge', e.target.value)} /></Field>
+            <Field label="גיל מקסימלי" error={errors.maxAge}><Input ltr type="number" min={0} max={120} value={v.maxAge} onChange={(e) => set('maxAge', e.target.value)} /></Field>
+          </div>
+          <Checkbox label="חובה להשתייך לתכנית ביטוח לאומי" checked={v.requireNationalInsurance} onChange={(c) => set('requireNationalInsurance', c)} />
+          <Field label="רק מי שלא השתתף בסדנה" hint="נבדק לפי נוכחות בפועל בסדנה שנבחרה">
+            <Select value={v.excludeId} onChange={(e) => set('excludeId', e.target.value)}>
               <option value="">ללא הגבלה</option>
-              <option value="FEMALE">{genderLabel.FEMALE} בלבד</option>
-              <option value="MALE">{genderLabel.MALE} בלבד</option>
+              {(all.data ?? []).filter((x) => x.id !== w.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </Select>
           </Field>
-          <Field label="גיל מינימלי" error={errors.minAge}><Input ltr type="number" min={0} max={120} value={v.minAge} onChange={(e) => set('minAge', e.target.value)} /></Field>
-          <Field label="גיל מקסימלי" error={errors.maxAge}><Input ltr type="number" min={0} max={120} value={v.maxAge} onChange={(e) => set('maxAge', e.target.value)} /></Field>
-        </div>
-        <Checkbox label="חובה להשתייך לתכנית ביטוח לאומי" checked={v.requireNationalInsurance} onChange={(c) => set('requireNationalInsurance', c)} />
+        </fieldset>
+        <fieldset className="space-y-4 rounded-md border border-slate-200 p-4">
+          <legend className="px-1 text-sm font-medium text-slate-700">הודעות לנרשמים באתר (אם לא ימולאו, יוצגו ברירות המחדל)</legend>
+          <Field label="הודעת דחייה למי שלא מתאים לקריטריון"><Textarea className="min-h-16" value={v.rejectMessage} onChange={(e) => set('rejectMessage', e.target.value)} /></Field>
+          <Field label="הודעה בסיום הרישום (שומרים לך מקום)"><Textarea className="min-h-16" value={v.completionMessage} onChange={(e) => set('completionMessage', e.target.value)} /></Field>
+          <Field label="הודעה אחרי שהרישום נסגר"><Textarea className="min-h-16" value={v.closedMessage} onChange={(e) => set('closedMessage', e.target.value)} /></Field>
+        </fieldset>
         <InlineAlert tone="blue">הגיל מחושב לפי שנה נוכחית פחות שנת לידה, ולא לפי תאריך יום הולדת מדויק. כשחסר נתון שנדרש לבדיקה (שנת לידה או מגדר), ההרשמה נחסמת עד להשלמתו.</InlineAlert>
         <Button type="submit" variant="primary" loading={mut.isPending}>שמירה</Button>
       </form>

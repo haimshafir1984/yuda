@@ -3,23 +3,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
 import { prisma } from '../src/db';
 import { addDays, todayDateOnly } from '../src/lib/dates';
+import { resetDb } from './helpers';
 
 const app = createApp();
 const api = () => request(app);
 const year = new Date().getFullYear();
 let phoneSeq = 0;
-
-async function resetDb() {
-  await prisma.registrationAnswer.deleteMany();
-  await prisma.attendance.deleteMany();
-  await prisma.memberRestriction.deleteMany();
-  await prisma.registration.deleteMany();
-  await prisma.questionOption.deleteMany();
-  await prisma.workshopQuestion.deleteMany();
-  await prisma.workshopSession.deleteMany();
-  await prisma.workshop.deleteMany();
-  await prisma.member.deleteMany();
-}
 
 async function mkMember(over: Record<string, unknown> = {}) {
   phoneSeq += 1;
@@ -355,10 +344,11 @@ describe('דף רישום ציבורי', () => {
     expect(regs).toHaveLength(1);
     expect(regs[0].source).toBe('PUBLIC');
 
-    // הרשמה חוזרת וחסימות מחזירות הודעה כללית ולא חושפות פרטים
+    // הרשמה חוזרת: הודעה ייעודית (לפי מסמך הדרישות), בלי פרטים אישיים
     const again = await api().post(`/api/public/workshops/${w.id}/check`).send({ phone: m.phone });
     expect(again.status).toBe(409);
-    expect(again.body.error.code).toBe('BLOCKED');
+    expect(again.body.error.code).toBe('ALREADY_REGISTERED');
+    expect(again.body.error.message).toContain('כבר רשום');
   });
 
   it('טיוטה לא ניתנת להרשמה ציבורית; הגבלה מחזירה הודעה כללית', async () => {
@@ -368,8 +358,8 @@ describe('דף רישום ציבורי', () => {
     await api().post(`/api/workshops/${w.id}/publish`);
     await api().post(`/api/members/${m.id}/restrictions`).send({ reason: 'פנימי' });
     const res = await api().post(`/api/public/workshops/${w.id}/check`).send({ phone: m.phone });
-    expect(res.body.error.code).toBe('BLOCKED');
-    expect(JSON.stringify(res.body)).not.toContain('פנימי');
+    expect(res.body.error.code).toBe('RESTRICTED');
+    expect(JSON.stringify(res.body)).not.toContain('פנימי'); // הסיבה הפנימית אינה נחשפת
   });
 });
 

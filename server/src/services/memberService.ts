@@ -296,7 +296,8 @@ export async function listRestrictions(memberId: number) {
   });
   return rows.map((r) => ({
     id: r.id,
-    scope: r.workshopId ? ('WORKSHOP' as const) : ('GENERAL' as const),
+    scope: r.workshopId ? ('WORKSHOP' as const) : r.kind ? ('KIND' as const) : ('GENERAL' as const),
+    kind: r.kind,
     workshopId: r.workshopId,
     workshopName: r.workshop?.name ?? null,
     reason: r.reason,
@@ -306,17 +307,40 @@ export async function listRestrictions(memberId: number) {
   }));
 }
 
-export async function addRestriction(memberId: number, workshopId: number | null | undefined, reason: string | null | undefined) {
+export async function addRestriction(
+  memberId: number,
+  workshopId: number | null | undefined,
+  reason: string | null | undefined,
+  kind?: 'WORKSHOP' | 'EVENT' | null,
+) {
   await getMember(memberId);
   if (workshopId) {
-    const w = await prisma.workshop.findUnique({ where: { id: workshopId } });
+    const w = await prisma.workshop.findUnique({ where: { id: workshopId }, include: { sessions: true } });
     if (!w) throw notFound('הסדנה');
+    // לפי המסמך: ניתן לבחור רק פעילות שטרם התקיימה
+    const last = w.sessions.map((s) => toDateOnly(s.date)!).sort().pop();
+    if (w.status === 'FINISHED' || w.status === 'CANCELLED' || (last && last < todayDateOnly()))
+      throw new AppError(422, 'WORKSHOP_PAST', 'ניתן להגביל רק פעילות שטרם התקיימה');
   }
   const dup = await prisma.memberRestriction.findFirst({
-    where: { memberId, workshopId: workshopId ?? null, removedAt: null },
+    where: { memberId, workshopId: workshopId ?? null, kind: kind ?? null, removedAt: null },
   });
   if (dup) throw new AppError(409, 'RESTRICTION_EXISTS', 'הגבלה זהה כבר קיימת וממתינה להסרה');
-  return prisma.memberRestriction.create({ data: { memberId, workshopId: workshopId ?? null, reason: reason ?? null } });
+  return prisma.memberRestriction.create({ data: { memberId, workshopId: workshopId ?? null, kind: kind ?? null, reason: reason ?? null } });
+}
+
+// ---------- הערות עו"סית בכרטיס החבר (טבלה נפרדת, לא בטבלת החברים הראשית) ----------
+
+export async function listNotes(memberId: number) {
+  await getMember(memberId);
+  const rows = await prisma.memberNote.findMany({ where: { memberId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+  return rows.map((n) => ({ id: n.id, text: n.text, author: n.author, createdAt: n.createdAt.toISOString() }));
+}
+
+export async function addNote(memberId: number, text: string, author: string | null | undefined) {
+  await getMember(memberId);
+  await prisma.memberNote.create({ data: { memberId, text, author: author ?? null } });
+  return listNotes(memberId);
 }
 
 export async function removeRestriction(memberId: number, restrictionId: number) {

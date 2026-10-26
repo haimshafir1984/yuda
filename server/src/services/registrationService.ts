@@ -1,21 +1,29 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { AppError, notFound } from '../errors';
-import { ageFromBirthYear, toDateOnly } from '../lib/dates';
+import { addDays, ageFromBirthYear, parseDateOnly, todayDateOnly, toDateOnly } from '../lib/dates';
 
 export interface AnswerInput {
   questionId: number;
   textValue?: string | null;
   optionId?: number | null;
+  optionIds?: number[] | null;
 }
 
 export interface RegisterOptions {
   source: 'ADMIN' | 'PUBLIC';
 }
 
+/** חלון הבדיקה של אי-הגעות חוזרות: חצי שנה אחורה */
+const NO_SHOW_WINDOW_DAYS = 183;
+const NO_SHOW_SINGLE_LIMIT = 3; // סדנאות/אירועים חד-פעמיים שלא הגיע אליהם
+const NO_SHOW_MULTI_LIMIT = 4; // מפגשים של סדנאות מתמשכות שלא הגיע אליהם
+
+const kindWord = (kind: string) => (kind === 'EVENT' ? 'אירועים' : 'סדנאות');
+
 /**
  * בדיקות הרשמה בצד השרת, לפי הסדר שהוגדר באפיון:
- * חבר קיים -> לא רשום כבר -> הגבלות -> הרשמה פתוחה -> התאמה לקריטריונים -> שאלות חובה.
+ * חבר קיים -> לא רשום כבר -> הגבלות -> הרשמה פתוחה -> התאמה לקריטריונים -> (באתר בלבד) אי-הגעות חוזרות -> שאלות חובה.
  * הפונקציה מקבלת client (גם טרנזקציה) ומחזירה AppError עם הסיבה הראשונה שנמצאה.
  */
 export async function assertCanRegister(
@@ -38,11 +46,14 @@ export async function assertCanRegister(
   const active = await db.registration.findFirst({ where: { memberId, workshopId, status: 'ACTIVE' } });
   if (active) throw new AppError(409, 'ALREADY_REGISTERED', `החבר כבר רשום ${workshop.kind === 'EVENT' ? 'לאירוע' : 'לסדנה'} זה`);
 
+  // הגבלות: כללית, לפי סוג פעילות, או לפעילות ספציפית
   const restrictions = await db.memberRestriction.findMany({
-    where: { memberId, removedAt: null, OR: [{ workshopId: null }, { workshopId }] },
+    where: { memberId, removedAt: null, OR: [{ workshopId: null, kind: null }, { workshopId }, { kind: workshop.kind }] },
   });
-  const general = restrictions.find((r) => r.workshopId === null);
+  const general = restrictions.find((r) => r.workshopId === null && r.kind === null);
   if (general) throw new AppError(403, 'RESTRICTED', 'החבר מוגבל מהרשמה לכל הסדנאות והאירועים', { reason: general.reason });
+  const byKind = restrictions.find((r) => r.kind === workshop.kind);
+  if (byKind) throw new AppError(403, 'RESTRICTED', `החבר מוגבל מהרשמה ל${kindWord(workshop.kind)}`, { reason: byKind.reason });
   const specific = restrictions.find((r) => r.workshopId === workshopId);
   if (specific) throw new AppError(403, 'RESTRICTED', `החבר מוגבל מהרשמה ל${label} זה`, { reason: specific.reason });
 
@@ -50,7 +61,7 @@ export async function assertCanRegister(
   if (workshop.status === 'FINISHED') throw new AppError(409, 'REGISTRATION_CLOSED', `${label} הסתיים ולא ניתן להירשם אליו`);
   if (opts.source === 'PUBLIC' && workshop.status === 'DRAFT')
     throw new AppError(409, 'REGISTRATION_CLOSED', `${label} טרם פורסם, ההרשמה אליו אינה זמינה`);
-  if (!workshop.registrationOpen) throw new AppError(409, 'REGISTRATION_CLOSED', 'ההרשמה סגורה');
+  if (!workshop.registrationOpen) throw new AppError(409, 'REGISTRATION_CLOSED', 'ההרשמה סגורה', { closedByFlag: true, customMessage: workshop.closedMessage });
 
   const reasons: string[] = [];
   if (workshop.genderRestriction) {
@@ -67,7 +78,27 @@ export async function assertCanRegister(
     }
   }
   if (workshop.requireNationalInsurance && !member.nationalInsurance) reasons.push(`${label} מיועד לחברי תכנית ביטוח לאומי בלבד`);
-  if (reasons.length) throw new AppError(422, 'NOT_ELIGIBLE', reasons.join('. '), { reasons });
+  if (workshop.excludeParticipantsOfWorkshopId) {
+    const other = await db.workshop.findUnique({ where: { id: workshop.excludeParticipantsOfWorkshopId } });
+    const attended = await db.attendance.count({
+      where: { status: 'PRESENT', registration: { memberId }, session: { workshopId: workshop.excludeParticipantsOfWorkshopId } },
+    });
+    if (attended > 0) reasons.push(`${label} מיועד למי שלא השתתפו ב"${other?.name ?? 'סדנה קודמת'}"`);
+  }
+  if (reasons.length) throw new AppError(422, 'NOT_ELIGIBLE', reasons.join('. '), { reasons, customMessage: workshop.rejectMessage });
+
+  // אי-הגעות חוזרות ללא ביטול מראש: נבדק רק בהרשמה דרך האתר ורק לפעילות חד-פעמית. הצוות יכול לעקוף בהרשמה ידנית.
+  if (opts.source === 'PUBLIC' && workshop.format === 'SINGLE') {
+    const since = parseDateOnly(addDays(todayDateOnly(), -NO_SHOW_WINDOW_DAYS));
+    const absences = await db.attendance.findMany({
+      where: { status: 'ABSENT', registration: { memberId }, session: { date: { gte: since } } },
+      include: { session: { include: { workshop: { select: { id: true, format: true } } } } },
+    });
+    const singles = new Set(absences.filter((a) => a.session.workshop.format === 'SINGLE').map((a) => a.session.workshop.id)).size;
+    const multis = absences.filter((a) => a.session.workshop.format === 'MULTI').length;
+    if (singles >= NO_SHOW_SINGLE_LIMIT || multis >= NO_SHOW_MULTI_LIMIT)
+      throw new AppError(403, 'NO_SHOW_BLOCK', 'החבר לא הגיע ללא ביטול מראש למספר פעילויות בחצי השנה האחרונה', { singles, multis });
+  }
 
   // answers === null: בדיקה מקדימה בלבד, ללא שאלות
   if (answers !== null) {
@@ -77,10 +108,15 @@ export async function assertCanRegister(
       if (q.type === 'TEXT') {
         const v = a?.textValue?.trim();
         if (q.required && !v) errors[q.id] = 'שאלת חובה';
-      } else {
+      } else if (q.type === 'SINGLE_CHOICE') {
         if (!a?.optionId) {
           if (q.required) errors[q.id] = 'שאלת חובה';
         } else if (!q.options.some((o) => o.id === a.optionId)) errors[q.id] = 'האפשרות שנבחרה אינה תקפה';
+      } else {
+        const ids = a?.optionIds ?? [];
+        if (!ids.length) {
+          if (q.required) errors[q.id] = 'שאלת חובה';
+        } else if (ids.some((id) => !q.options.some((o) => o.id === id))) errors[q.id] = 'אחת האפשרויות שנבחרו אינה תקפה';
       }
     }
     const unknown = answers.filter((a) => !workshop.questions.some((q) => q.id === a.questionId));
@@ -109,6 +145,10 @@ export async function registerMember(memberId: number, workshopId: number, answe
           await tx.registrationAnswer.create({ data: { registrationId: reg.id, questionId: q.id, textValue: text } });
         } else if (q.type === 'SINGLE_CHOICE' && a?.optionId) {
           await tx.registrationAnswer.create({ data: { registrationId: reg.id, questionId: q.id, optionId: a.optionId } });
+        } else if (q.type === 'MULTI_CHOICE' && a?.optionIds?.length) {
+          // בחירה מרובה: התשובה נשמרת כרשימת תוויות, אחרי שכל אפשרות אומתה מול השאלה
+          const labels = q.options.filter((o) => a.optionIds!.includes(o.id)).map((o) => o.label);
+          await tx.registrationAnswer.create({ data: { registrationId: reg.id, questionId: q.id, textValue: labels.join(', ') } });
         }
       }
       return reg;

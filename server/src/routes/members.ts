@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncHandler, idParam } from '../http';
 import * as members from '../services/memberService';
-import { memberSchema, preferencesSchema, restrictionSchema } from '../validation';
+import { memberNoteSchema, memberSchema, preferencesSchema, restrictionSchema } from '../validation';
 
 export const membersRouter = Router();
 
@@ -56,7 +56,7 @@ membersRouter.post(
   '/:id/restrictions',
   asyncHandler(async (req, res) => {
     const body = restrictionSchema.parse(req.body);
-    await members.addRestriction(idParam(req), body.workshopId, body.reason);
+    await members.addRestriction(idParam(req), body.workshopId, body.reason, body.kind);
     res.status(201).json(await members.listRestrictions(idParam(req)));
   }),
 );
@@ -66,5 +66,15 @@ membersRouter.delete(
   asyncHandler(async (req, res) => {
     await members.removeRestriction(idParam(req), Number(req.params.restrictionId));
     res.json(await members.listRestrictions(idParam(req)));
+  }),
+);
+
+membersRouter.get('/:id/notes', asyncHandler(async (req, res) => res.json(await members.listNotes(idParam(req)))));
+
+membersRouter.post(
+  '/:id/notes',
+  asyncHandler(async (req, res) => {
+    const body = memberNoteSchema.parse(req.body);
+    res.status(201).json(await members.addNote(idParam(req), body.text, body.author));
   }),
 );

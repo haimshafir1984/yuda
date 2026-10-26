@@ -45,6 +45,13 @@ export interface Workshop {
   status: WorkshopStatus;
   registrationOpen: boolean;
   registrationRequired: boolean;
+  registrationMode: 'REQUIRED' | 'NOT_NEEDED' | 'RECOMMENDED';
+  autoCloseRegistration: boolean;
+  priceType: 'FIXED' | 'MONTHLY';
+  excludeParticipantsOfWorkshopId: number | null;
+  rejectMessage: string | null;
+  closedMessage: string | null;
+  completionMessage: string | null;
   genderRestriction: Gender | null;
   minAge: number | null;
   maxAge: number | null;
@@ -70,7 +77,7 @@ export interface SessionRow {
 export interface Question {
   id: number;
   text: string;
-  type: 'TEXT' | 'SINGLE_CHOICE';
+  type: 'TEXT' | 'SINGLE_CHOICE' | 'MULTI_CHOICE';
   required: boolean;
   answerCount: number;
   options: { id: number; label: string }[];
@@ -142,7 +149,8 @@ export interface ExceptionRow {
 
 export interface Restriction {
   id: number;
-  scope: 'GENERAL' | 'WORKSHOP';
+  scope: 'GENERAL' | 'KIND' | 'WORKSHOP';
+  kind: 'WORKSHOP' | 'EVENT' | null;
   workshopId: number | null;
   workshopName: string | null;
   reason: string | null;
@@ -164,14 +172,249 @@ export interface PublicWorkshop {
   sessionCount: number;
   isPaid: boolean;
   price: number | null;
+  priceType: 'FIXED' | 'MONTHLY';
   registrationRequired: boolean;
+  registrationMode: 'REQUIRED' | 'NOT_NEEDED' | 'RECOMMENDED';
   registrationOpen: boolean;
   closedReason: string | null;
-  questions: { id: number; text: string; type: 'TEXT' | 'SINGLE_CHOICE'; required: boolean; options: { id: number; label: string }[] }[];
+  questions: { id: number; text: string; type: 'TEXT' | 'SINGLE_CHOICE' | 'MULTI_CHOICE'; required: boolean; options: { id: number; label: string }[] }[];
 }
 
 export interface AnswerInput {
   questionId: number;
   textValue?: string | null;
   optionId?: number | null;
+  optionIds?: number[] | null;
+}
+
+// ======================= שפ"ח =======================
+export type Track = 'PRIVATE' | 'SMAT';
+export type TreatmentStatus = 'PENDING_THERAPIST' | 'PENDING_CONTRACT' | 'ACTIVE' | 'ACTIVE_EXTENSION' | 'PENDING_EXTENSION_SIGNATURE' | 'PAUSED' | 'FROZEN' | 'FINISHED';
+
+export interface Therapist {
+  id: number;
+  fullName: string;
+  phone: string | null;
+  email: string | null;
+  type: Track;
+  pricePerSession: number;
+  active: boolean;
+}
+
+export interface Treatment {
+  id: number;
+  memberId: number;
+  memberName: string;
+  therapist: { id: number; fullName: string } | null;
+  socialWorker: string | null;
+  track: Track;
+  status: TreatmentStatus;
+  baseApprovedSessions: number;
+  extensionSessions: number;
+  pendingExtensionSessions: number;
+  pendingExtensionIds: number[];
+  approvedSessions: number;
+  heldSessions: number;
+  remainingSessions: number;
+  overQuota: boolean;
+  sessionCost: number | null;
+  copayPerSession: number;
+  yehudaApproval: boolean;
+  intakeRef: string | null;
+  startDate: string;
+  endDate: string | null;
+  endReason: string | null;
+}
+
+export interface MonthlyReport {
+  id: number;
+  treatmentId: number;
+  therapistId: number;
+  therapistName: string;
+  year: number;
+  month: number;
+  sessionsHeld: number;
+  paidCancellations: number;
+  notes: string | null;
+  ratePerSession: number;
+  copayPerSession: number;
+  sessionsCost: number;
+  cancellationsCost: number;
+  therapistTotal: number;
+  copayTotal: number;
+  status: 'DRAFT' | 'PENDING' | 'APPROVED';
+  approvedAt: string | null;
+  therapistPaymentStatus: 'PENDING' | 'ACCOUNTING' | 'PAID';
+  copayPaymentStatus: 'PENDING' | 'PAID';
+}
+
+export interface TreatmentEvent {
+  id: number;
+  type: string;
+  date: string;
+  description: string;
+  actor: string | null;
+  details: string | null;
+  exceptionKind: string | null;
+}
+
+export interface TreatmentHistory {
+  therapists: { id: number; therapistId: number; therapistName: string; fromDate: string; toDate: string | null; changeReason: string | null; note: string | null; heldSessions: number }[];
+  statuses: { id: number; fromStatus: string | null; toStatus: TreatmentStatus; reason: string | null; source: 'MANUAL' | 'AUTO'; createdAt: string }[];
+  extensions: { id: number; number: number; additionalSessions: number; copayPerSession: number; extensionDate: string; yehudaApproval: boolean; signedAt: string | null }[];
+}
+
+export interface SocialReport {
+  id: number;
+  date: string;
+  type: 'PSYCHOSOCIAL' | 'FIRST_SESSION_SUMMARY' | 'THERAPIST_FOLLOWUP' | 'GENERAL';
+  title: string;
+  content: string;
+}
+
+export interface MemberCopayRow {
+  reportId: number;
+  treatmentId: number;
+  period: string;
+  therapistName: string;
+  amount: number;
+  status: 'PENDING' | 'PAID';
+}
+
+export interface TreatmentExceptionRow {
+  id: string;
+  type: 'TREATMENT_LATE_PAYMENT' | 'TREATMENT_VIOLATION' | 'TREATMENT_MANUAL';
+  treatmentId: number;
+  date: string;
+  details: string;
+}
+
+// ======================= פניות וליווי עו"ס =======================
+export type RequestStatus = 'NEW' | 'REVIEW' | 'WAITING_INFO' | 'IN_PROGRESS' | 'HANDLED' | 'REJECTED' | 'CLOSED';
+export interface ServiceRequest {
+  id: number;
+  memberId: number;
+  memberName: string;
+  type: string;
+  subject: string;
+  description: string | null;
+  openedAt: string;
+  source: string;
+  assignee: string | null;
+  priority: 'NORMAL' | 'HIGH' | 'URGENT';
+  status: RequestStatus;
+  internalNote: string | null;
+  decision: string | null;
+  closeReason: string | null;
+  updatedAt: string;
+}
+export interface RequestEvent {
+  id: number;
+  type: string;
+  description: string;
+  actor: string | null;
+  fromStatus: string | null;
+  toStatus: string | null;
+  createdAt: string;
+}
+
+export type SocialStatus = 'NOT_STARTED' | 'ACTIVE' | 'FROZEN' | 'FINISHED';
+export interface SocialProcess {
+  id: number;
+  memberId: number;
+  memberName: string;
+  nationalInsurance: boolean;
+  requestId: number | null;
+  socialWorker: string | null;
+  kinds: string[];
+  type: 'ONE_TIME' | 'ONGOING';
+  typeManual: boolean;
+  suggestedType: 'ONE_TIME' | 'ONGOING' | null;
+  goal: string | null;
+  status: SocialStatus;
+  startDate: string;
+  endDate: string | null;
+  endReason: string | null;
+  endSummary: string | null;
+  meetingCount: number;
+  lastActivity: string;
+}
+export interface SocialMeeting {
+  id: number;
+  processId: number;
+  date: string;
+  time: string;
+  subject: string;
+  mode: string;
+  durationMinutes: number | null;
+  summary: string | null;
+  followUpNotes: string | null;
+  followUpRequired: boolean;
+  number: number | null;
+  status: 'HELD' | 'CANCELLED';
+  cancelReason: string | null;
+  topics: string[];
+  meetingActions: string[];
+  externalPartner: string | null;
+}
+export interface SocialIntervention {
+  id: number;
+  processId: number;
+  date: string;
+  type: string;
+  description: string;
+  involved: string | null;
+  status: 'OPEN' | 'IN_PROGRESS' | 'DONE';
+  treatmentId: number | null;
+  meetingId: number | null;
+}
+export interface SwReport {
+  id: number;
+  processId: number;
+  type: 'PERIODIC' | 'GENERAL' | 'CLOSING';
+  date: string;
+  title: string;
+  content: string;
+}
+export interface SocialEvent {
+  id: number;
+  type: string;
+  description: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  createdAt: string;
+}
+export interface RequestRelated {
+  socialProcesses: SocialProcess[];
+  treatments: Treatment[];
+}
+export interface ProcessRelated {
+  request: { id: number; subject: string; type: string; status: RequestStatus; openedAt: string } | null;
+  treatments: { id: number; status: TreatmentStatus; track: Track; therapist: string | null; startDate: string }[];
+  otherProcesses: SocialProcess[];
+}
+export interface TreatmentLinks {
+  socialProcesses: SocialProcess[];
+  requests: { id: number; subject: string; status: RequestStatus; openedAt: string }[];
+}
+
+// ======================= השלמות לפי מסמך הדרישות =======================
+export interface MemberNote {
+  id: number;
+  text: string;
+  author: string | null;
+  createdAt: string;
+}
+export interface TreatmentMeeting {
+  id: number;
+  date: string;
+  subject: string;
+  subjectLabel: string;
+  summary: string | null;
+}
+export interface TreatmentTask {
+  id: number;
+  title: string;
+  dueDate: string | null;
+  done: boolean;
 }

@@ -33,6 +33,7 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (err instanceof SyntaxError && 'body' in err) {
     return res.status(400).json({ error: { code: 'BAD_JSON', message: 'בקשה לא תקינה' } });
   }
-  console.error(err);
+  // לא נרשם תוכן השגיאה, כדי לא לכתוב מידע טיפולי רגיש ללוגים
+  console.error('Unhandled server error:', err instanceof Error ? err.name : typeof err);
   return res.status(500).json({ error: { code: 'INTERNAL', message: 'אירעה שגיאת שרת. נסו שוב מאוחר יותר' } });
 }

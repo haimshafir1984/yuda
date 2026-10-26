@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAction } from '../../components/toast';
 import { Button, Card, Checkbox, Field, Input, PageHeader, Select, Textarea } from '../../components/ui';
+import { priceTypeLabel, registrationModeLabel } from '../../lib/format';
 import { api, ApiError } from '../../lib/api';
 import type { Workshop } from '../../lib/types';
 
@@ -13,7 +14,7 @@ export default function WorkshopCreate() {
 
   const [v, setV] = useState({
     name: '', subtitle: '', description: '', facilitator: '', format: 'SINGLE', startDate: '', startTime: '', endTime: '',
-    sessionCount: '3', isPaid: false, price: '', nationalInsurance: false,
+    sessionCount: '3', isPaid: false, price: '', priceType: 'FIXED', registrationMode: 'REQUIRED', nationalInsurance: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => {
@@ -53,6 +54,8 @@ export default function WorkshopCreate() {
       sessionCount: multi ? Number(v.sessionCount) : 1,
       isPaid: v.isPaid,
       price: v.isPaid ? Number(v.price) : null,
+      priceType: v.priceType,
+      registrationMode: kind === 'EVENT' ? v.registrationMode : 'REQUIRED',
       nationalInsurance: v.nationalInsurance,
     });
   };
@@ -114,6 +117,12 @@ export default function WorkshopCreate() {
               <Field label="מחיר בשקלים" required error={errors.price}>
                 <Input ltr type="number" min={0} step="0.01" value={v.price} onChange={(e) => set('price', e.target.value)} />
               </Field>
+            )}
+            {v.isPaid && multi && (
+              <Field label="סוג המחיר"><Select value={v.priceType} onChange={(e) => set('priceType', e.target.value)}>{Object.entries(priceTypeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
+            )}
+            {kind === 'EVENT' && (
+              <Field label="חובת רישום"><Select value={v.registrationMode} onChange={(e) => set('registrationMode', e.target.value)}>{Object.entries(registrationModeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
             )}
           </div>
           <Checkbox label={`ה${label} משויך לביטוח לאומי`} checked={v.nationalInsurance} onChange={(c) => set('nationalInsurance', c)} />

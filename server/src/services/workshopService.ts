@@ -27,7 +27,14 @@ export const workshopDto = (w: WorkshopWithSessions) => {
     nationalInsurance: w.nationalInsurance,
     status: w.status,
     registrationOpen: w.registrationOpen,
-    registrationRequired: w.registrationRequired,
+    registrationRequired: w.registrationMode === 'REQUIRED',
+    registrationMode: w.registrationMode,
+    autoCloseRegistration: w.autoCloseRegistration,
+    priceType: w.priceType,
+    excludeParticipantsOfWorkshopId: w.excludeParticipantsOfWorkshopId,
+    rejectMessage: w.rejectMessage,
+    closedMessage: w.closedMessage,
+    completionMessage: w.completionMessage,
     genderRestriction: w.genderRestriction,
     minAge: w.minAge,
     maxAge: w.maxAge,
@@ -106,6 +113,10 @@ export async function createWorkshop(input: z.infer<typeof workshopCreateSchema>
         endTime: input.endTime ?? null,
         isPaid: input.isPaid,
         price: input.isPaid ? input.price ?? null : null,
+        priceType: format === 'MULTI' ? input.priceType : 'FIXED',
+        // בסדנה תמיד חובה להירשם; ההגדרה הגמישה רלוונטית לאירועים בלבד
+        registrationMode: input.kind === 'EVENT' ? input.registrationMode : 'REQUIRED',
+        registrationRequired: (input.kind === 'EVENT' ? input.registrationMode : 'REQUIRED') !== 'NOT_NEEDED',
         nationalInsurance: input.nationalInsurance,
       },
     });
@@ -128,6 +139,12 @@ export async function updateWorkshop(id: number, input: z.infer<typeof workshopU
   if (!existing) throw notFound('הסדנה');
 
   const isPaid = input.isPaid ?? existing.isPaid;
+  if (input.registrationMode && input.registrationMode !== 'REQUIRED' && existing.kind === 'WORKSHOP')
+    throw new AppError(422, 'REGISTRATION_MODE', 'בסדנה תמיד חובה להירשם. ההגדרה הגמישה זמינה באירועים בלבד');
+  if (input.excludeParticipantsOfWorkshopId) {
+    if (input.excludeParticipantsOfWorkshopId === id) throw new AppError(422, 'VALIDATION', 'לא ניתן להגביל לפי הסדנה עצמה');
+    if (!(await prisma.workshop.findUnique({ where: { id: input.excludeParticipantsOfWorkshopId } }))) throw new AppError(404, 'WORKSHOP_NOT_FOUND', 'הסדנה שנבחרה להגבלה לא נמצאה');
+  }
   await prisma.$transaction(async (tx) => {
     await tx.workshop.update({
       where: { id },
@@ -145,7 +162,13 @@ export async function updateWorkshop(id: number, input: z.infer<typeof workshopU
         ...(input.nationalInsurance !== undefined && { nationalInsurance: input.nationalInsurance }),
         ...(input.status !== undefined && { status: input.status }),
         ...(input.registrationOpen !== undefined && { registrationOpen: input.registrationOpen }),
-        ...(input.registrationRequired !== undefined && { registrationRequired: input.registrationRequired }),
+        ...(input.registrationMode !== undefined && { registrationMode: input.registrationMode, registrationRequired: input.registrationMode !== 'NOT_NEEDED' }),
+        ...(input.autoCloseRegistration !== undefined && { autoCloseRegistration: input.autoCloseRegistration }),
+        ...(input.priceType !== undefined && { priceType: input.priceType }),
+        ...(input.excludeParticipantsOfWorkshopId !== undefined && { excludeParticipantsOfWorkshopId: input.excludeParticipantsOfWorkshopId }),
+        ...(input.rejectMessage !== undefined && { rejectMessage: input.rejectMessage }),
+        ...(input.closedMessage !== undefined && { closedMessage: input.closedMessage }),
+        ...(input.completionMessage !== undefined && { completionMessage: input.completionMessage }),
         ...(input.genderRestriction !== undefined && { genderRestriction: input.genderRestriction }),
         ...(input.minAge !== undefined && { minAge: input.minAge }),
         ...(input.maxAge !== undefined && { maxAge: input.maxAge }),
@@ -269,7 +292,7 @@ export async function addQuestion(workshopId: number, input: z.infer<typeof ques
       type: input.type,
       required: input.required,
       sortOrder: (max._max.sortOrder ?? 0) + 1,
-      options: input.type === 'SINGLE_CHOICE' ? { create: input.options.map((o, i) => ({ label: o.label, sortOrder: i })) } : undefined,
+      options: input.type !== 'TEXT' ? { create: input.options.map((o, i) => ({ label: o.label, sortOrder: i })) } : undefined,
     },
   });
   return listQuestions(workshopId);
@@ -286,13 +309,13 @@ export async function updateQuestion(questionId: number, input: z.infer<typeof q
 
   await prisma.$transaction(async (tx) => {
     await tx.workshopQuestion.update({ where: { id: questionId }, data: { text: input.text, type: input.type, required: input.required } });
-    const keepIds = input.type === 'SINGLE_CHOICE' ? input.options.filter((o) => o.id).map((o) => o.id!) : [];
+    const keepIds = input.type !== 'TEXT' ? input.options.filter((o) => o.id).map((o) => o.id!) : [];
     for (const old of q.options) {
       if (keepIds.includes(old.id)) continue;
       if (old._count.answers > 0) throw new AppError(409, 'HAS_ANSWERS', `לא ניתן להסיר את האפשרות "${old.label}" כי נבחרה בהרשמות קיימות`);
       await tx.questionOption.delete({ where: { id: old.id } });
     }
-    if (input.type === 'SINGLE_CHOICE') {
+    if (input.type !== 'TEXT') {
       for (const [i, o] of input.options.entries()) {
         if (o.id && q.options.some((x) => x.id === o.id)) await tx.questionOption.update({ where: { id: o.id }, data: { label: o.label, sortOrder: i } });
         else await tx.questionOption.create({ data: { questionId, label: o.label, sortOrder: i } });

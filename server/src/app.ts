@@ -5,6 +5,8 @@ import path from 'path';
 import { errorHandler } from './http';
 import { membersRouter } from './routes/members';
 import { publicRouter } from './routes/public';
+import { socialRouter } from './routes/social';
+import { treatmentsRouter } from './routes/treatments';
 import { workshopsRouter } from './routes/workshops';
 
 export function createApp() {
@@ -16,6 +18,8 @@ export function createApp() {
   app.use('/api/members', membersRouter);
   app.use('/api/public', publicRouter);
   app.use('/api', workshopsRouter);
+  app.use('/api', treatmentsRouter);
+  app.use('/api', socialRouter);
   app.use('/api', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'הנתיב לא נמצא' } }));
 
   // הגשת הלקוח הבנוי (npm start) מאותו שרת

@@ -59,6 +59,8 @@ export const workshopCreateSchema = z
     sessionCount: optInt(1, 60, 'מספר מפגשים לא תקין'),
     isPaid: z.boolean().default(false),
     price: optPrice,
+    priceType: z.enum(['FIXED', 'MONTHLY']).default('FIXED'),
+    registrationMode: z.enum(['REQUIRED', 'NOT_NEEDED', 'RECOMMENDED']).default('REQUIRED'),
     nationalInsurance: z.boolean().default(false),
   })
   .superRefine((v, ctx) => {
@@ -82,7 +84,13 @@ export const workshopUpdateSchema = z
     nationalInsurance: z.boolean(),
     status: z.enum(WORKSHOP_STATUSES),
     registrationOpen: z.boolean(),
-    registrationRequired: z.boolean(),
+    registrationMode: z.enum(['REQUIRED', 'NOT_NEEDED', 'RECOMMENDED']),
+    autoCloseRegistration: z.boolean(),
+    priceType: z.enum(['FIXED', 'MONTHLY']),
+    excludeParticipantsOfWorkshopId: z.preprocess((v) => (v === '' ? null : v), z.number().int().nullable().optional()),
+    rejectMessage: optStr(500),
+    closedMessage: optStr(500),
+    completionMessage: optStr(500),
     genderRestriction: z.preprocess(emptyToNull, z.enum(GENDERS).nullable().optional()),
     minAge: optInt(0, 120, 'גיל מינימלי לא תקין'),
     maxAge: optInt(0, 120, 'גיל מקסימלי לא תקין'),
@@ -108,24 +116,34 @@ export const sessionSchema = z.object({
 export const questionSchema = z
   .object({
     text: z.string().trim().min(1, 'נוסח השאלה הוא שדה חובה').max(300),
-    type: z.enum(['TEXT', 'SINGLE_CHOICE']),
+    type: z.enum(['TEXT', 'SINGLE_CHOICE', 'MULTI_CHOICE']),
     required: z.boolean().default(false),
     options: z
       .array(z.object({ id: z.number().int().optional(), label: z.string().trim().min(1, 'אפשרות לא יכולה להיות ריקה').max(120) }))
       .default([]),
   })
   .superRefine((v, ctx) => {
-    if (v.type === 'SINGLE_CHOICE' && v.options.length < 2)
+    if (v.type !== 'TEXT' && v.options.length < 2)
       ctx.addIssue({ code: 'custom', path: ['options'], message: 'שאלת בחירה דורשת לפחות שתי אפשרויות' });
   });
 
 export const answersSchema = z
-  .array(z.object({ questionId: z.number().int(), textValue: z.string().max(2000).nullish(), optionId: z.number().int().nullish() }))
+  .array(z.object({ questionId: z.number().int(), textValue: z.string().max(2000).nullish(), optionId: z.number().int().nullish(), optionIds: z.array(z.number().int()).nullish() }))
   .default([]);
 
 export const registerSchema = z.object({ memberId: z.number().int(), answers: answersSchema });
 export const cancelSchema = z.object({ reason: optStr(300) });
-export const restrictionSchema = z.object({ workshopId: z.number().int().nullable().optional(), reason: optStr(300) });
+export const restrictionSchema = z
+  .object({
+    workshopId: z.number().int().nullable().optional(),
+    kind: z.enum(['WORKSHOP', 'EVENT']).nullable().optional(),
+    reason: optStr(300),
+  })
+  .refine((v) => !(v.workshopId && v.kind), { message: 'ניתן לבחור הגבלה לפי סוג או לפי פעילות ספציפית, לא שניהם' });
+export const memberNoteSchema = z.object({
+  text: z.string({ required_error: 'יש להזין טקסט' }).trim().min(1, 'יש להזין טקסט').max(5000),
+  author: optStr(80),
+});
 export const attendanceSchema = z.object({
   registrationId: z.number().int(),
   status: z.enum(['PRESENT', 'ABSENT']).nullable(),

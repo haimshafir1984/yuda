@@ -26,35 +26,46 @@ model Member {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  registrations Registration[]
-  restrictions  MemberRestriction[]
+  registrations   Registration[]
+  restrictions    MemberRestriction[]
+  treatments      PsychologicalTreatment[]
+  serviceRequests ServiceRequest[]
+  socialProcesses SocialWorkProcess[]
+  notes           MemberNote[]
 
   @@index([phoneNormalized])
 }
 
 model Workshop {
-  id                       Int      @id @default(autoincrement())
-  kind                     String // WORKSHOP | EVENT
-  name                     String
-  subtitle                 String?
-  description              String?
-  facilitator              String?
-  format                   String // SINGLE | MULTI
-  startTime                String? // HH:mm - ברירת מחדל למפגשים
-  endTime                  String?
-  isPaid                   Boolean  @default(false)
-  price                    Float?
-  nationalInsurance        Boolean  @default(false)
-  status                   String   @default("DRAFT") // DRAFT | PUBLISHED | ONGOING | FINISHED | CANCELLED
-  registrationOpen         Boolean  @default(true)
-  registrationRequired     Boolean  @default(true)
-  genderRestriction        String? // MALE | FEMALE
-  minAge                   Int?
-  maxAge                   Int?
-  requireNationalInsurance Boolean  @default(false)
-  summary                  String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                              Int      @id @default(autoincrement())
+  kind                            String // WORKSHOP | EVENT
+  name                            String
+  subtitle                        String?
+  description                     String?
+  facilitator                     String?
+  format                          String // SINGLE | MULTI
+  startTime                       String? // HH:mm - ברירת מחדל למפגשים
+  endTime                         String?
+  isPaid                          Boolean  @default(false)
+  price                           Float?
+  nationalInsurance               Boolean  @default(false)
+  status                          String   @default("DRAFT") // DRAFT | PUBLISHED | ONGOING | FINISHED | CANCELLED
+  registrationOpen                Boolean  @default(true)
+  registrationRequired            Boolean  @default(true)
+  genderRestriction               String? // MALE | FEMALE
+  minAge                          Int?
+  maxAge                          Int?
+  requireNationalInsurance        Boolean  @default(false)
+  summary                         String?
+  registrationMode                String   @default("REQUIRED") // REQUIRED | NOT_NEEDED | RECOMMENDED
+  autoCloseRegistration           Boolean  @default(false)
+  priceType                       String   @default("FIXED") // FIXED | MONTHLY (סדנה מרובת מפגשים בתשלום)
+  excludeParticipantsOfWorkshopId Int? // הגבלה: רק מי שלא השתתף בסדנה זו
+  rejectMessage                   String?
+  closedMessage                   String?
+  completionMessage               String?
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
 
   sessions      WorkshopSession[]
   registrations Registration[]
@@ -90,10 +101,10 @@ model Registration {
   workshop   Workshop             @relation(fields: [workshopId], references: [id])
   answers    RegistrationAnswer[]
   attendance Attendance[]
+  // בהגירה נוסף בנוסף אינדקס ייחודי חלקי: (memberId, workshopId) WHERE status = 'ACTIVE'
 
   @@index([memberId])
   @@index([workshopId, status])
-  // בהגירה נוסף בנוסף אינדקס ייחודי חלקי: (memberId, workshopId) WHERE status = 'ACTIVE'
 }
 
 model Attendance {
@@ -114,6 +125,7 @@ model MemberRestriction {
   id         Int       @id @default(autoincrement())
   memberId   Int
   workshopId Int? // null = חסימה כללית
+  kind       String? // WORKSHOP | EVENT: חסימה לפי סוג פעילות
   reason     String?
   createdAt  DateTime  @default(now())
   removedAt  DateTime? // הסרה לוגית, לשמירת היסטוריה
@@ -161,4 +173,368 @@ model RegistrationAnswer {
   option       QuestionOption?  @relation(fields: [optionId], references: [id])
 
   @@unique([registrationId, questionId])
+}
+
+// ======================= שפ"ח - ליווי טיפול פסיכולוגי חיצוני =======================
+
+model Therapist {
+  id              Int      @id @default(autoincrement())
+  fullName        String
+  phone           String?
+  email           String?
+  type            String // PRIVATE | SMAT
+  pricePerSession Float
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  treatments PsychologicalTreatment[]
+  history    TreatmentTherapistHistory[]
+  reports    TreatmentMonthlyReport[]
+}
+
+model PsychologicalTreatment {
+  id                 Int       @id @default(autoincrement())
+  memberId           Int
+  socialWorker       String?
+  track              String // PRIVATE | SMAT
+  currentTherapistId Int?
+  // PENDING_THERAPIST | PENDING_CONTRACT | ACTIVE | ACTIVE_EXTENSION | PAUSED | FROZEN | FINISHED
+  status             String
+  approvedSessions   Int // מכסה בסיסית. סך המאושרות = בסיס + הארכות
+  sessionCost        Float? // עלות פגישה נוכחית (מתעדכנת עם שיוך/החלפת מטפל)
+  copayPerSession    Float     @default(0)
+  yehudaApproval     Boolean   @default(false)
+  intakeRef          String? // מקום שמור לקישור אינטייק עתידי
+  startDate          DateTime
+  endDate            DateTime?
+  endReason          String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  member           Member                        @relation(fields: [memberId], references: [id])
+  currentTherapist Therapist?                    @relation(fields: [currentTherapistId], references: [id])
+  extensions       TreatmentExtension[]
+  events           TreatmentEvent[]
+  statusHistory    TreatmentStatusHistory[]
+  therapistHistory TreatmentTherapistHistory[]
+  monthlyReports   TreatmentMonthlyReport[]
+  socialReports    TreatmentSocialWorkerReport[]
+  requestLinks     ServiceRequestTreatment[]
+  socialLinks      SocialWorkProcessTreatment[]
+  interventions    SocialWorkIntervention[]
+  meetings         TreatmentMeeting[]
+  tasks            TreatmentTask[]
+
+  @@index([memberId])
+  @@index([status])
+}
+
+model TreatmentMonthlyReport {
+  id                     Int       @id @default(autoincrement())
+  treatmentId            Int
+  therapistId            Int
+  year                   Int
+  month                  Int
+  sessionsHeld           Int
+  paidCancellations      Int       @default(0)
+  notes                  String?
+  ratePerSession         Float // תעריף נשמר בדיווח, שינוי תעריף עתידי אינו משנה סכומים היסטוריים
+  copayPerSession        Float
+  status                 String    @default("DRAFT") // DRAFT | PENDING | APPROVED
+  approvedAt             DateTime?
+  therapistPaymentStatus String    @default("PENDING") // PENDING | ACCOUNTING | PAID
+  copayPaymentStatus     String    @default("PENDING") // PENDING | PAID
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+  therapist Therapist              @relation(fields: [therapistId], references: [id])
+
+  @@unique([treatmentId, therapistId, year, month])
+}
+
+model TreatmentExtension {
+  id                 Int       @id @default(autoincrement())
+  treatmentId        Int
+  additionalSessions Int
+  copayPerSession    Float
+  yehudaApproval     Boolean
+  extensionDate      DateTime
+  idempotencyKey     String?
+  signedAt           DateTime? // עד החתימה ההארכה אינה נספרת במכסה
+  createdAt          DateTime  @default(now())
+
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+
+  @@unique([treatmentId, idempotencyKey])
+}
+
+model TreatmentEvent {
+  id            Int      @id @default(autoincrement())
+  treatmentId   Int
+  type          String // OPENED | ACTIVATED | THERAPIST_ASSIGNED | THERAPIST_CHANGE | EXTENSION | PAUSE | RESUME | FREEZE | UNFREEZE | FINISH | NOTE | REPORT_APPROVED | EXCEPTION
+  date          DateTime
+  description   String
+  actor         String? // גורם מעורב
+  details       String? // טקסט חופשי, פרטים נוספים
+  exceptionKind String? // LATE_PAYMENT | VIOLATION_PAUSE | MANUAL
+  createdAt     DateTime @default(now())
+
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+
+  @@index([treatmentId, date])
+}
+
+model TreatmentStatusHistory {
+  id          Int      @id @default(autoincrement())
+  treatmentId Int
+  fromStatus  String?
+  toStatus    String
+  reason      String?
+  source      String // MANUAL | AUTO
+  createdAt   DateTime @default(now())
+
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+
+  @@index([treatmentId])
+}
+
+model TreatmentTherapistHistory {
+  id           Int       @id @default(autoincrement())
+  treatmentId  Int
+  therapistId  Int
+  fromDate     DateTime
+  toDate       DateTime?
+  changeReason String?
+  note         String?
+  createdAt    DateTime  @default(now())
+
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+  therapist Therapist              @relation(fields: [therapistId], references: [id])
+
+  @@index([treatmentId])
+}
+
+model TreatmentSocialWorkerReport {
+  id          Int      @id @default(autoincrement())
+  treatmentId Int
+  date        DateTime
+  type        String // PSYCHOSOCIAL | FIRST_SESSION_SUMMARY | THERAPIST_FOLLOWUP | GENERAL
+  title       String
+  content     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+
+  @@index([treatmentId])
+}
+
+// ======================= פניות ובקשות סיוע + ליווי עו"ס =======================
+
+model ServiceRequest {
+  id           Int      @id @default(autoincrement())
+  memberId     Int
+  type         String // SUPPORT | RIGHTS | PSYCH_EXTERNAL | HEALTH | FAMILY_MEDIATION | BUREAUCRATIC | OTHER
+  subject      String
+  description  String?
+  openedAt     DateTime
+  source       String // WEBSITE | PHONE | MEETING | MANUAL | OTHER
+  assignee     String?
+  priority     String   @default("NORMAL") // NORMAL | HIGH | URGENT
+  status       String   @default("NEW") // NEW | REVIEW | WAITING_INFO | IN_PROGRESS | HANDLED | REJECTED | CLOSED
+  internalNote String?
+  decision     String? // SOCIAL_WORK_NEEDED | PSYCH_REFERRAL | EXTERNAL_REFERRAL | ANSWERED | REJECTED | MORE_INFO
+  closeReason  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  member     Member                    @relation(fields: [memberId], references: [id])
+  events     ServiceRequestEvent[]
+  processes  SocialWorkProcess[]
+  treatments ServiceRequestTreatment[]
+
+  @@index([memberId])
+  @@index([status])
+}
+
+model ServiceRequestEvent {
+  id          Int      @id @default(autoincrement())
+  requestId   Int
+  type        String // CREATED | EDITED | ASSIGNED | STATUS_CHANGE | NOTE | CONTACT | DECISION | PROCESS_OPENED | TREATMENT_LINKED
+  description String
+  actor       String?
+  fromStatus  String?
+  toStatus    String?
+  createdAt   DateTime @default(now())
+
+  request ServiceRequest @relation(fields: [requestId], references: [id])
+
+  @@index([requestId])
+}
+
+model ServiceRequestTreatment {
+  id          Int      @id @default(autoincrement())
+  requestId   Int
+  treatmentId Int
+  createdAt   DateTime @default(now())
+
+  request   ServiceRequest         @relation(fields: [requestId], references: [id])
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+
+  @@unique([requestId, treatmentId])
+}
+
+model SocialWorkProcess {
+  id           Int       @id @default(autoincrement())
+  memberId     Int
+  requestId    Int?
+  socialWorker String?
+  kinds        String // קודים מופרדים בפסיקים: RIGHTS,SUPPORT,PARENT_MEDIATION,FAMILY,EMOTIONAL,BUREAUCRATIC,OTHER
+  type         String // ONE_TIME | ONGOING
+  typeManual   Boolean   @default(false) // false = הסוג נקבע אוטומטית לפי מספר הפגישות
+  goal         String?
+  status       String    @default("NOT_STARTED") // NOT_STARTED | ACTIVE | FROZEN | FINISHED
+  startDate    DateTime
+  endDate      DateTime?
+  endReason    String?
+  endSummary   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  member        Member                       @relation(fields: [memberId], references: [id])
+  request       ServiceRequest?              @relation(fields: [requestId], references: [id])
+  meetings      SocialWorkMeeting[]
+  interventions SocialWorkIntervention[]
+  reports       SocialWorkReport[]
+  events        SocialWorkEvent[]
+  treatments    SocialWorkProcessTreatment[]
+
+  @@index([memberId])
+  @@index([requestId])
+  @@index([status])
+}
+
+model SocialWorkMeeting {
+  id               Int      @id @default(autoincrement())
+  processId        Int
+  meetingAt        DateTime
+  subject          String
+  mode             String // FACE | PHONE | ONLINE | OTHER
+  durationMinutes  Int?
+  summary          String?
+  followUpNotes    String?
+  followUpRequired Boolean  @default(false)
+  status           String   @default("HELD") // HELD | CANCELLED
+  cancelReason     String?
+  topics           String? // קודי נושאים מופרדים בפסיקים
+  meetingActions   String? // התערבויות בפגישה (קודים מופרדים בפסיקים)
+  externalPartner  String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  process SocialWorkProcess @relation(fields: [processId], references: [id])
+
+  @@index([processId, meetingAt])
+}
+
+model SocialWorkIntervention {
+  id          Int      @id @default(autoincrement())
+  processId   Int
+  date        DateTime
+  type        String // EXTERNAL_CONTACT | RIGHTS_ASSIST | REFERRAL | FAMILY_TALK | BUREAUCRATIC | OTHER
+  description String
+  involved    String?
+  status      String   @default("OPEN") // OPEN | IN_PROGRESS | DONE
+  treatmentId Int? // קישור אופציונלי לשפ"ח של אותו חבר
+  meetingId   Int? // קישור אופציונלי לפגישה באותו תהליך (נבדק בשרת)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  process   SocialWorkProcess       @relation(fields: [processId], references: [id])
+  treatment PsychologicalTreatment? @relation(fields: [treatmentId], references: [id])
+
+  @@index([processId])
+}
+
+model SocialWorkReport {
+  id        Int      @id @default(autoincrement())
+  processId Int
+  type      String // PERIODIC | GENERAL | CLOSING
+  date      DateTime
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  process SocialWorkProcess @relation(fields: [processId], references: [id])
+
+  @@index([processId])
+}
+
+model SocialWorkEvent {
+  id          Int      @id @default(autoincrement())
+  processId   Int
+  type        String // OPENED | ACTIVATED | MEETING_ADDED | MEETING_EDITED | INTERVENTION_ADDED | REPORT_ADDED | KINDS_CHANGED | TYPE_CHANGED | FROZEN | UNFROZEN | FINISHED | REOPENED | TREATMENT_LINKED | TREATMENT_UNLINKED | EDITED
+  description String
+  fromStatus  String?
+  toStatus    String?
+  createdAt   DateTime @default(now())
+
+  process SocialWorkProcess @relation(fields: [processId], references: [id])
+
+  @@index([processId])
+}
+
+model SocialWorkProcessTreatment {
+  id          Int      @id @default(autoincrement())
+  processId   Int
+  treatmentId Int
+  createdAt   DateTime @default(now())
+
+  process   SocialWorkProcess      @relation(fields: [processId], references: [id])
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+
+  @@unique([processId, treatmentId])
+}
+
+// ======================= השלמות לפי מסמך הדרישות =======================
+
+model MemberNote {
+  id        Int      @id @default(autoincrement())
+  memberId  Int
+  kind      String   @default("SOCIAL")
+  text      String
+  author    String?
+  createdAt DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id])
+
+  @@index([memberId])
+}
+
+model TreatmentMeeting {
+  id          Int      @id @default(autoincrement())
+  treatmentId Int
+  date        DateTime
+  subject     String // FIT | EARLY_END | CONSULT | EXTENSION_REQUEST | OTHER
+  summary     String?
+  createdAt   DateTime @default(now())
+
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+
+  @@index([treatmentId])
+}
+
+model TreatmentTask {
+  id          Int       @id @default(autoincrement())
+  treatmentId Int
+  title       String
+  dueDate     DateTime?
+  done        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
+
+  @@index([treatmentId])
 }

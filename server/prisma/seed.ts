@@ -4,6 +4,9 @@
  * תעודות הזהות הן בדויות ואינן שייכות לאנשים אמיתיים.
  */
 import { PrismaClient } from '@prisma/client';
+import * as T from '../src/services/treatmentService';
+import * as RQ from '../src/services/serviceRequestService';
+import * as SW from '../src/services/socialWorkService';
 
 const prisma = new PrismaClient();
 
@@ -250,13 +253,261 @@ async function seedRestrictions(m: Map<string, number>, w: Map<string, number>) 
   }
 }
 
+
+// ======================= שפ"ח =======================
+// כל הנתונים בדויים. מטפלים נוצרים לפי שם; תהליכים נוצרים רק אם המטפל הראשון נוצר כעת (הרצה חוזרת לא משכפלת).
+
+const THERAPISTS = [
+  { fullName: 'ד"ר נועה גולדשטיין', phone: '03-5550101', email: 'noa.g@example.com', type: 'PRIVATE', pricePerSession: 350 },
+  { fullName: 'מיכאל ברק', phone: '03-5550102', email: 'michael.b@example.com', type: 'PRIVATE', pricePerSession: 320 },
+  { fullName: 'תמר אשכנזי', phone: '03-5550103', email: 'tamar.a@example.com', type: 'PRIVATE', pricePerSession: 300 },
+  { fullName: 'עידו פלד', phone: '03-5550104', email: 'ido.p@example.com', type: 'SMAT', pricePerSession: 280 },
+  { fullName: 'הילה רוזנברג', phone: '03-5550105', email: 'hila.r@example.com', type: 'SMAT', pricePerSession: 260 },
+  { fullName: 'אריאל שחר', phone: '03-5550106', email: 'ariel.s@example.com', type: 'PRIVATE', pricePerSession: 340, active: false },
+] as const;
+
+const monthsAgo = (n: number) => {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - n);
+  return { year: d.getFullYear(), month: d.getMonth() + 1 };
+};
+
+async function seedTreatments(members: Map<string, number>) {
+  const ids = new Map<string, number>();
+  for (const t of THERAPISTS) {
+    const existing = await prisma.therapist.findFirst({ where: { fullName: t.fullName } });
+    if (existing) ids.set(t.fullName, existing.id);
+    else {
+      const c = await prisma.therapist.create({ data: { ...t, active: 'active' in t ? t.active : true } });
+      ids.set(t.fullName, c.id);
+    }
+  }
+  const th = (n: string) => ids.get(n)!;
+  const M = (n: string) => members.get(n)!;
+  const report = async (treatmentId: number, therapistName: string, ago: number, held: number, cancelled: number, approve = true) => {
+    const { year, month } = monthsAgo(ago);
+    const r = await T.createReport(treatmentId, { therapistId: th(therapistName), year, month, sessionsHeld: held, paidCancellations: cancelled, notes: null, ratePerSession: undefined, copayPerSession: undefined });
+    if (approve) await T.approveReport(r.id);
+    return r;
+  };
+  // כל חבר מקבל תהליך הדגמה רק אם אין לו כבר תהליך שפ"ח (הרצה חוזרת לא משכפלת)
+  const open = async (member: string, track: 'PRIVATE' | 'SMAT', sessions: number, copay: number, therapist?: string, worker = 'אורית לביא') => {
+    if ((await prisma.psychologicalTreatment.count({ where: { memberId: M(member) } })) > 0) {
+      return null;
+    }
+    return T.createTreatment({ memberId: M(member), approvedSessions: sessions, copayPerSession: copay, socialWorker: worker, yehudaApproval: true, track, therapistId: therapist ? th(therapist) : null, intakeRef: null });
+  };
+
+  // 1. ממתין להתאמת מטפל (סמט, טרם נבחר מטפל)
+  await open('רבקה גבאי', 'SMAT', 20, 40, undefined, 'רונית כץ');
+  // 2. ממתין לחתימה על חוזה
+  await open('יעקב פרץ', 'PRIVATE', 24, 50, 'תמר אשכנזי');
+  // 3. פעיל, מטפל פרטי, דיווחים מאושרים, השתתפות עצמית שטרם שולמה
+  const a = await open('משה לוי', 'PRIVATE', 30, 50, 'ד"ר נועה גולדשטיין');
+  if (a) {
+    await T.signDemo(a.id);
+    const a1 = await report(a.id, 'ד"ר נועה גולדשטיין', 2, 4, 1);
+    await T.setPayment(a1.id, { therapistPaymentStatus: 'PAID', copayPaymentStatus: 'PAID' });
+    const a2 = await report(a.id, 'ד"ר נועה גולדשטיין', 1, 3, 0);
+    await T.setPayment(a2.id, { therapistPaymentStatus: 'ACCOUNTING' });
+    await T.addException(a.id, { kind: 'LATE_PAYMENT', description: 'השתתפות עצמית לחודש הקודם טרם שולמה', date: null });
+  }
+  // 4. סמט פעיל
+  const b = await open('שרה מזרחי', 'SMAT', 20, 40, 'עידו פלד', 'רונית כץ');
+  if (b) {
+    await T.signDemo(b.id);
+    await report(b.id, 'עידו פלד', 1, 5, 0);
+  }
+  // 5. שני מטפלים בהיסטוריה
+  const c = await open('דוד אברהם', 'PRIVATE', 30, 60, 'מיכאל ברק', 'שירה אדלר');
+  if (c) {
+    await T.signDemo(c.id);
+    await report(c.id, 'מיכאל ברק', 3, 4, 1);
+    await T.changeTherapist(c.id, { newTherapistId: th('תמר אשכנזי'), date: null, reason: 'בקשת המטופל', note: 'המעבר תואם מראש' });
+    const c2 = await report(c.id, 'תמר אשכנזי', 1, 6, 0);
+    await T.setPayment(c2.id, { therapistPaymentStatus: 'PENDING' });
+  }
+  // 6. הארכה
+  const d = await open('מרים ביטון', 'PRIVATE', 20, 50, 'ד"ר נועה גולדשטיין');
+  if (d) {
+    await T.signDemo(d.id);
+    await report(d.id, 'ד"ר נועה גולדשטיין', 2, 5, 0);
+    const extended = await T.addExtension(d.id, { additionalSessions: 10, copayPerSession: 50, yehudaApproval: true, date: null, idempotencyKey: 'seed-ext-1' });
+    await T.signExtension(d.id, extended.pendingExtensionIds[0]);
+  }
+  // 7. הסתיים
+  const e = await open('לאה דהן', 'SMAT', 12, 30, 'הילה רוזנברג', 'רונית כץ');
+  if (e) {
+    await T.signDemo(e.id);
+    await report(e.id, 'הילה רוזנברג', 4, 6, 0);
+    await report(e.id, 'הילה רוזנברג', 3, 6, 0);
+    await T.finishTreatment(e.id, { reason: 'GOAL', date: null, note: 'הסתיימה מכסת הפגישות ומטרת הטיפול הושגה' });
+  }
+  // 8. מושהה עקב הפרה
+  const f = await open('אסתר יוסף', 'PRIVATE', 15, 50, 'ד"ר נועה גולדשטיין');
+  if (f) {
+    await T.signDemo(f.id);
+    await T.pauseTreatment(f.id, { reason: 'EXCESS_CANCELLATIONS', note: 'ביטולים חוזרים ללא הודעה מראש' });
+  }
+}
+
+// ======================= פניות וליווי עו"ס =======================
+// כל הנתונים בדויים. כל פנייה נוצרת רק אם אין לאותו חבר פנייה עם אותו נושא; תהליך ליווי רק אם אין לחבר תהליך עם אותה מטרה.
+
+const isoDay = (offset: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+async function seedSocial(members: Map<string, number>) {
+  const M = (n: string) => members.get(n)!;
+  const treatmentOf = async (name: string) => (await prisma.psychologicalTreatment.findFirst({ where: { memberId: M(name) }, orderBy: { id: 'asc' } }))?.id ?? null;
+
+  const request = async (
+    member: string, type: string, subject: string, o: { status?: string; assignee?: string; priority?: string; days?: number; description?: string; source?: string; decision?: string; reason?: string; note?: string },
+  ) => {
+    const existing = await prisma.serviceRequest.findFirst({ where: { memberId: M(member), subject } });
+    if (existing) return { id: existing.id, created: false };
+    const r = await RQ.createRequest({
+      memberId: M(member), type: type as never, subject, description: o.description ?? null, openedAt: isoDay(-(o.days ?? 10)), source: (o.source ?? 'MANUAL') as never,
+      assignee: o.assignee ?? null, priority: (o.priority ?? 'NORMAL') as never, internalNote: o.note ?? null,
+    });
+    if (o.status && o.status !== 'NEW') await RQ.changeRequestStatus(r.id, { status: o.status as never, reason: o.reason ?? null });
+    if (o.decision) await RQ.setDecision(r.id, { decision: o.decision as never, note: null });
+    return { id: r.id, created: true };
+  };
+
+  const process = async (
+    member: string, goal: string, kinds: string[], type: 'ONE_TIME' | 'ONGOING', o: { requestId?: number; worker?: string; days?: number; status?: 'ACTIVE' | 'FROZEN' | 'FINISHED' | 'NOT_STARTED' },
+  ) => {
+    const existing = await prisma.socialWorkProcess.findFirst({ where: { memberId: M(member), goal } });
+    if (existing) return { id: existing.id, created: false };
+    const p = await SW.createProcess({ memberId: M(member), requestId: o.requestId ?? null, socialWorker: o.worker ?? 'אורית לביא', kinds: kinds as never, type, goal, startDate: isoDay(-(o.days ?? 30)) });
+    if (o.status && o.status !== 'NOT_STARTED') await SW.activateProcess(p.id);
+    return { id: p.id, created: true };
+  };
+
+  const meetings = async (pid: number, list: [number, string, string, string?][]) => {
+    for (const [ago, subject, mode, summary] of list)
+      await SW.addMeeting(pid, { date: isoDay(-ago), time: '10:00', subject, mode: mode as never, durationMinutes: 45, summary: summary ?? 'סיכום בדוי של הפגישה', followUpNotes: null, followUpRequired: false });
+  };
+
+  // ----- פניות -----
+  const r1 = await request('רחל כהן', 'RIGHTS', 'בירור זכאות לקצבת שאירים', { assignee: 'אורית לביא', days: 2, description: 'החברה מבקשת לברר זכאות. נתונים בדויים.', source: 'PHONE' });
+  const r2 = await request('דוד אברהם', 'SUPPORT', 'תמיכה וליווי בתקופה קשה', { status: 'IN_PROGRESS', assignee: 'רונית כץ', days: 40, priority: 'HIGH', decision: 'SOCIAL_WORK_NEEDED', source: 'MEETING' });
+  const r3 = await request('שרה מזרחי', 'PSYCH_EXTERNAL', 'בקשה לטיפול פסיכולוגי חיצוני', { status: 'HANDLED', assignee: 'שירה אדלר', days: 60, decision: 'PSYCH_REFERRAL' });
+  await request('יצחק אוחיון', 'BUREAUCRATIC', 'סיוע במילוי טפסי ארנונה', { status: 'WAITING_INFO', assignee: 'אורית לביא', days: 15, description: 'ממתין למסמכים מהחבר' });
+  await request('חנה אזולאי', 'HEALTH', 'ייעוץ בנושא מעקב רפואי', { status: 'REVIEW', assignee: 'רונית כץ', days: 5, priority: 'URGENT' });
+  const r6 = await request('אליהו עמר', 'FAMILY_MEDIATION', 'מתח משפחתי עם הילדים', { status: 'IN_PROGRESS', assignee: 'שירה אדלר', days: 25, decision: 'SOCIAL_WORK_NEEDED' });
+  await request('תמר וקנין', 'OTHER', 'בקשת מידע על פעילויות הארגון', { status: 'CLOSED', assignee: 'אורית לביא', days: 70, reason: 'ניתן מידע טלפוני, אין צורך בטיפול נוסף', decision: 'ANSWERED' });
+  await request('ישראל מלכה', 'RIGHTS', 'הנחה בתחבורה ציבורית', { status: 'REJECTED', assignee: 'רונית כץ', days: 50, reason: 'אינו עומד בקריטריונים', decision: 'REJECTED' });
+  const r9 = await request('משה לוי', 'SUPPORT', 'ליווי בתקופת החלמה', { status: 'IN_PROGRESS', assignee: 'אורית לביא', days: 35, decision: 'SOCIAL_WORK_NEEDED' });
+  const r10 = await request('מרים ביטון', 'PSYCH_EXTERNAL', 'בקשה להארכת הטיפול הפסיכולוגי', { status: 'IN_PROGRESS', assignee: 'שירה אדלר', days: 12, priority: 'HIGH' });
+  await request('נעמי סבג', 'BUREAUCRATIC', 'בירור מול ביטוח לאומי', { assignee: 'רונית כץ', days: 1, priority: 'HIGH', source: 'WEBSITE' });
+  const r12 = await request('בנימין טויטו', 'SUPPORT', 'תמיכה וליווי למשפחה', { status: 'HANDLED', assignee: 'שירה אדלר', days: 90, decision: 'SOCIAL_WORK_NEEDED' });
+
+  const linkReq = async (reqId: number, member: string) => {
+    const t = await treatmentOf(member);
+    if (t) await RQ.linkTreatment(reqId, t).catch(() => undefined); // כבר מקושר: מדלגים
+  };
+  if (r3.created) await linkReq(r3.id, 'שרה מזרחי');
+  if (r10.created) await linkReq(r10.id, 'מרים ביטון');
+  if (r1.created) {
+    await RQ.addRequestNote(r1.id, { text: 'נקבעה שיחת בירור ראשונית' });
+    await RQ.addContact(r1.id, { text: 'שיחה ראשונית עם החברה', mode: 'PHONE', date: null });
+  }
+
+  // ----- ליווי עו"ס -----
+  const p1 = await process('דוד אברהם', 'ליווי תמיכתי לאחר אובדן', ['SUPPORT', 'EMOTIONAL'], 'ONGOING', { requestId: r2.id, worker: 'רונית כץ', days: 38, status: 'ACTIVE' });
+  if (p1.created) {
+    await meetings(p1.id, [[35, 'היכרות ובניית תוכנית', 'FACE'], [21, 'מעקב שבועי', 'PHONE'], [7, 'חיזוק ומשאבים', 'FACE']]);
+  }
+  const p2 = await process('משה לוי', 'ליווי בתקופת החלמה ומיצוי זכויות', ['SUPPORT', 'RIGHTS'], 'ONGOING', { requestId: r9.id, worker: 'אורית לביא', days: 30, status: 'ACTIVE' });
+  if (p2.created) {
+    await meetings(p2.id, [[28, 'סקירת צרכים', 'FACE'], [10, 'בדיקת התקדמות', 'ONLINE']]);
+    await SW.addIntervention(p2.id, { date: isoDay(-20), type: 'RIGHTS_ASSIST', description: 'סיוע בהגשת בקשה לבדיקת זכאות להטבות', involved: 'ביטוח לאומי', status: 'IN_PROGRESS', treatmentId: null });
+    await SW.addIntervention(p2.id, { date: isoDay(-8), type: 'EXTERNAL_CONTACT', description: 'שיחה עם גורם מקצועי בנוגע לטיפול הפסיכולוגי', involved: 'מטפל חיצוני', status: 'DONE', treatmentId: await treatmentOf('משה לוי') });
+    const t = await treatmentOf('משה לוי');
+    if (t) await SW.linkTreatment(p2.id, t);
+  }
+  const p3 = await process('בנימין טויטו', 'ליווי משפחתי קצר מועד', ['SUPPORT', 'FAMILY'], 'ONGOING', { requestId: r12.id, worker: 'שירה אדלר', days: 85, status: 'ACTIVE' });
+  if (p3.created) {
+    await meetings(p3.id, [[80, 'פגישת היכרות', 'FACE'], [66, 'עבודה על תקשורת', 'FACE'], [52, 'פגישה משפחתית', 'FACE'], [40, 'סיכום ביניים', 'PHONE']]);
+    await SW.addReport(p3.id, { type: 'PERIODIC', date: isoDay(-45), title: 'סיכום תקופתי', content: 'התקדמות טובה. נתונים בדויים להדגמה.' });
+    await SW.finishProcess(p3.id, { endDate: isoDay(-30), reason: 'GOAL_ACHIEVED', summary: 'מטרת הליווי הושגה והמשפחה מתפקדת באופן יציב.' });
+    await SW.addReport(p3.id, { type: 'CLOSING', date: isoDay(-30), title: 'סיכום סיום תהליך', content: 'התהליך הסתיים בהצלחה.' });
+  }
+  const p4 = await process('חנה אזולאי', 'ליווי רגשי בתקופת שינוי', ['EMOTIONAL'], 'ONGOING', { worker: 'רונית כץ', days: 55, status: 'ACTIVE' });
+  if (p4.created) {
+    await meetings(p4.id, [[50, 'פגישה ראשונה', 'FACE'], [36, 'פגישת המשך', 'PHONE']]);
+    await SW.freezeProcess(p4.id, 'החברה בנסיעה לחו"ל');
+  }
+  const p5 = await process('רחל כהן', 'בירור זכאות ראשוני', ['RIGHTS'], 'ONE_TIME', { worker: 'אורית לביא', days: 1, status: 'NOT_STARTED' });
+  void p5;
+  const p6 = await process('לאה דהן', 'ייעוץ חד-פעמי בנושא קשר משפחתי', ['FAMILY'], 'ONE_TIME', { worker: 'שירה אדלר', days: 14, status: 'ACTIVE' });
+  if (p6.created) {
+    await meetings(p6.id, [[10, 'ייעוץ חד-פעמי', 'FACE']]);
+    const t = await treatmentOf('לאה דהן');
+    if (t) await SW.linkTreatment(p6.id, t);
+  }
+  const p7 = await process('יעקב פרץ', 'מיצוי זכויות וסיוע בירוקרטי', ['RIGHTS', 'BUREAUCRATIC'], 'ONGOING', { worker: 'אורית לביא', days: 75, status: 'ACTIVE' });
+  if (p7.created) {
+    await meetings(p7.id, [[70, 'מיפוי זכויות', 'FACE'], [56, 'איסוף מסמכים', 'PHONE'], [42, 'הגשת בקשות', 'FACE'], [28, 'מעקב', 'PHONE'], [14, 'עדכון סטטוס בקשות', 'ONLINE']]);
+    await SW.addIntervention(p7.id, { date: isoDay(-40), type: 'EXTERNAL_CONTACT', description: 'פנייה לרשות מקומית בנושא הנחה בארנונה', involved: 'רשות מקומית', status: 'DONE', treatmentId: null });
+    await SW.addIntervention(p7.id, { date: isoDay(-12), type: 'BUREAUCRATIC', description: 'סיוע במילוי טפסי בקשה', involved: null, status: 'OPEN', treatmentId: null });
+  }
+  const p8 = await process('אליהו עמר', 'גישור מול הילדים', ['PARENT_MEDIATION', 'FAMILY'], 'ONGOING', { requestId: r6.id, worker: 'שירה אדלר', days: 22, status: 'ACTIVE' });
+  if (p8.created) await meetings(p8.id, [[18, 'פגישת גישור ראשונה', 'FACE']]);
+}
+
+// ======================= השלמות לפי מסמך הדרישות (נתוני הדגמה) =======================
+// כל פריט נוצר רק אם אינו קיים, ולכן הרצה חוזרת לא משכפלת.
+
+async function seedRequirementGaps(members: Map<string, number>) {
+  const M = (n: string) => members.get(n)!;
+
+  // הערת עו"סית בכרטיס חבר
+  const noteText = 'שוחחתי עם החברה על צרכי הליווי. נתונים בדויים להדגמה.';
+  if (!(await prisma.memberNote.findFirst({ where: { memberId: M('חנה אזולאי'), text: noteText } })))
+    await prisma.memberNote.create({ data: { memberId: M('חנה אזולאי'), text: noteText, author: 'רונית כץ' } });
+
+  // פגישה עם מטופל ומשימה לעו"סית בשפ"ח
+  const t = await prisma.psychologicalTreatment.findFirst({ where: { memberId: M('משה לוי') }, orderBy: { id: 'asc' } });
+  if (t) {
+    if (!(await prisma.treatmentMeeting.findFirst({ where: { treatmentId: t.id } })))
+      await T.addTreatmentMeeting(t.id, { date: isoDay(-9), subject: 'FIT', summary: 'המטופל מרוצה ממידת ההתאמה של המטפל' });
+    if (!(await prisma.treatmentTask.findFirst({ where: { treatmentId: t.id } })))
+      await T.addTask(t.id, { title: 'לקיים שיחת חתך עם המטפל', dueDate: isoDay(7) });
+  }
+
+  // פגישה שבוטלה וגורם שת"פ בליווי עו"ס
+  const p = await prisma.socialWorkProcess.findFirst({ where: { memberId: M('דוד אברהם'), goal: 'ליווי תמיכתי לאחר אובדן' } });
+  if (p && !(await prisma.socialWorkMeeting.findFirst({ where: { processId: p.id, status: 'CANCELLED' } }))) {
+    await SW.addMeeting(p.id, { date: isoDay(-14), time: '10:00', subject: 'פגישת מעקב', mode: 'FACE', durationMinutes: 60, summary: null, followUpNotes: null, followUpRequired: false, status: 'CANCELLED', cancelReason: 'החבר חלה ולא יכול היה להגיע', topics: [], meetingActions: [], externalPartner: null });
+    await SW.addMeeting(p.id, { date: isoDay(-3), time: '11:00', subject: 'חיזוק ומשאבים נוספים', mode: 'PHONE', durationMinutes: 30, summary: 'שיחה קצרה. נתונים בדויים.', followUpNotes: null, followUpRequired: true, status: 'HELD', cancelReason: null, topics: ['FAMILY', 'RELATIONSHIP'], meetingActions: ['EXTERNAL_PARTNER'], externalPartner: 'מרכז הזדמנות' });
+  }
+
+  // שאלת בחירה מרובה (צ'קבוקס) לסדנה קיימת
+  const w = await prisma.workshop.findFirst({ where: { name: 'כתיבה יוצרת' } });
+  const qText = 'אילו סוגי כתיבה מעניינים אותך?';
+  if (w && !(await prisma.workshopQuestion.findFirst({ where: { workshopId: w.id, text: qText } })))
+    await prisma.workshopQuestion.create({
+      data: { workshopId: w.id, text: qText, type: 'MULTI_CHOICE', required: false, sortOrder: 9, options: { create: ['זיכרונות', 'שירה', 'סיפורים קצרים'].map((label, i) => ({ label, sortOrder: i })) } },
+    });
+}
+
 async function main() {
   const members = await seedMembers();
   const workshops = await seedWorkshops();
   await seedActivity(members, workshops);
   await seedRestrictions(members, workshops);
-  const [mc, wc, rc] = await Promise.all([prisma.member.count(), prisma.workshop.count(), prisma.registration.count()]);
-  console.log(`Seed complete: ${mc} members, ${wc} workshops, ${rc} registrations.`);
+  await seedTreatments(members);
+  await seedSocial(members);
+  await seedRequirementGaps(members);
+  const [mc, wc, rc, tc, qc, pc] = await Promise.all([prisma.member.count(), prisma.workshop.count(), prisma.registration.count(), prisma.psychologicalTreatment.count(), prisma.serviceRequest.count(), prisma.socialWorkProcess.count()]);
+  console.log(`Seed complete: ${mc} members, ${wc} workshops, ${rc} registrations, ${tc} treatments, ${qc} service requests, ${pc} social-work processes.`);
 }
 
 main()
