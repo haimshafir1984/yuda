@@ -342,7 +342,9 @@ async function seedTreatments(members: Map<string, number>) {
     await T.signDemo(e.id);
     await report(e.id, 'הילה רוזנברג', 4, 6, 0);
     await report(e.id, 'הילה רוזנברג', 3, 6, 0);
-    await T.finishTreatment(e.id, { reason: 'GOAL', date: null, note: 'הסתיימה מכסת הפגישות ומטרת הטיפול הושגה' });
+    // המכסה (12) התמלאה בדיווח המאושר האחרון, והטיפול כבר הסתיים אוטומטית; מסיימים ידנית רק אם עדיין פתוח
+    if ((await T.getTreatment(e.id)).status !== 'FINISHED')
+      await T.finishTreatment(e.id, { reason: 'GOAL', date: null, note: 'הסתיימה מכסת הפגישות ומטרת הטיפול הושגה' });
   }
   // 8. מושהה עקב הפרה
   const f = await open('אסתר יוסף', 'PRIVATE', 15, 50, 'ד"ר נועה גולדשטיין');
@@ -391,7 +393,7 @@ async function seedSocial(members: Map<string, number>) {
 
   const meetings = async (pid: number, list: [number, string, string, string?][]) => {
     for (const [ago, subject, mode, summary] of list)
-      await SW.addMeeting(pid, { date: isoDay(-ago), time: '10:00', subject, mode: mode as never, durationMinutes: 45, summary: summary ?? 'סיכום בדוי של הפגישה', followUpNotes: null, followUpRequired: false });
+      await SW.addMeeting(pid, { date: isoDay(-ago), time: '10:00', subject, mode: mode as never, durationMinutes: 45, summary: summary ?? 'סיכום בדוי של הפגישה', followUpNotes: null, followUpRequired: false, status: 'HELD', cancelReason: null, topics: [], meetingActions: [], externalPartner: null });
   };
 
   // ----- פניות -----
