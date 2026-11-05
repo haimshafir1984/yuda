@@ -32,7 +32,7 @@ export default function Layout() {
   const qc = useQueryClient();
   const nav = NAV.filter((n) => can(n.area));
   // החלפת משתמש: מנקים את הנתונים של המשתמש הקודם ומציגים את מסך הכניסה
-  const logout = useAction(() => api.post('/auth/logout'), { onSuccess: () => qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' }) });
+  const logout = useAction(() => api.post('/auth/logout'), { onSuccess: () => { try { sessionStorage.setItem('crm-pick-user', '1'); } catch { /* ignore */ } qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' }); void qc.invalidateQueries({ queryKey: ['auth', 'me'] }); } });
 
   useEffect(() => setMobileOpen(false), [location.pathname]);
 

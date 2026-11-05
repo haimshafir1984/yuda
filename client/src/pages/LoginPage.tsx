@@ -12,7 +12,7 @@ export default function LoginPage() {
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ['auth', 'demo-users'], queryFn: () => api.get<DemoUser[]>('/auth/demo-users') });
   const login = useAction((id: number) => api.post('/auth/login', { userId: id }), {
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['auth', 'me'] }),
+    onSuccess: () => { try { sessionStorage.removeItem('crm-pick-user'); } catch { /* ignore */ } void qc.invalidateQueries({ queryKey: ['auth', 'me'] }); },
   });
 
   const columns: Column<DemoUser>[] = [

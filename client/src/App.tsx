@@ -1,7 +1,9 @@
-import { ReactNode } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ReactNode, useEffect } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import { Card, EmptyState, Spinner } from './components/ui';
+import { api } from './lib/api';
 import { Area, useAuth } from './lib/auth';
 import LoginPage from './pages/LoginPage';
 import MemberCard from './pages/members/MemberCard';
@@ -24,9 +26,23 @@ import WorkshopCreate from './pages/workshops/WorkshopCreate';
 import WorkshopsList from './pages/workshops/WorkshopsList';
 
 /** בלי משתמש מחובר מוצג מסך הכניסה להדגמה */
+// ברירת המחדל: כניסה אוטומטית כמנהל כללי (רואה הכל). אחרי "החלפת משתמש" מוצג מסך הבחירה
+const PICK_FLAG = 'crm-pick-user';
+const flagged = () => { try { return sessionStorage.getItem(PICK_FLAG) === '1'; } catch { return false; } };
 function AuthGate() {
   const { me, loading } = useAuth();
-  if (loading) return <Spinner />;
+  const qc = useQueryClient();
+  const needsAuto = !loading && !me?.user && !flagged();
+  const auto = useMutation({
+    mutationFn: async () => {
+      const users = await api.get<{ id: number; role: string }[]>('/auth/demo-users');
+      const gm = users.find((u) => u.role === 'GENERAL_MANAGER') ?? users[0];
+      if (gm) await api.post('/auth/login', { userId: gm.id });
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['auth', 'me'] }),
+  });
+  useEffect(() => { if (needsAuto && auto.isIdle) auto.mutate(); }, [needsAuto, auto]);
+  if (loading || (needsAuto && !auto.isError)) return <Spinner />;
   if (!me?.user) return <LoginPage />;
   return <Outlet />;
 }
