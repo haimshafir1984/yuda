@@ -1,3 +1,5 @@
+import ReadOnlyBanner from '../../components/ReadOnlyBanner';
+import { ReadOnlyScope, useEditState, useIsForeign } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, ExternalLink, Send } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -189,6 +191,8 @@ export default function WorkshopCard() {
   const [attendanceSession, setAttendanceSession] = useState<number | null>(null);
   const [publishing, setPublishing] = useState(false);
   const { data: w, isLoading, error, refetch } = useQuery({ queryKey: ['workshop', id], queryFn: () => api.get<Workshop>(`/workshops/${id}`) });
+  const foreign = useIsForeign(null);
+  const readOnly = useEditState().readOnly || foreign.foreign;
   const publish = useAction(() => api.post(`/workshops/${id}/publish`), { success: 'הסטטוס עודכן ל"מפורסם באתר"', onSuccess: () => setPublishing(false) });
 
   if (isLoading) return <Spinner />;
@@ -225,7 +229,7 @@ export default function WorkshopCard() {
         actions={
           <>
             {w.status === 'DRAFT' && (
-              <Button variant="primary" onClick={() => setPublishing(true)}>
+              <Button variant="primary" disabled={readOnly} onClick={() => setPublishing(true)}>
                 <Send className="size-4" aria-hidden /> פרסם באתר
               </Button>
             )}
@@ -238,6 +242,8 @@ export default function WorkshopCard() {
           </>
         }
       />
+      <ReadOnlyScope readOnly={foreign.foreign} reason={foreign.reason}>
+        <ReadOnlyBanner />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList tabs={tabs} />
         <TabsContent value="general"><GeneralTab w={w} /></TabsContent>
@@ -253,6 +259,7 @@ export default function WorkshopCard() {
         <TabsContent value="finance"><FutureNotice title="כספים" text="בפיתוח עתידי. מחיר הסדנה נשמר בפרטים הכלליים, ללא סליקה או הנהלת חשבונות." /></TabsContent>
         <TabsContent value="summary"><SummaryTab w={w} /></TabsContent>
       </Tabs>
+      </ReadOnlyScope>
 
       <Dialog
         open={publishing}

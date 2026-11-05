@@ -1,6 +1,9 @@
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../db';
+import { currentActorName, currentUser } from '../auth/context';
+import { REQUEST_SCOPE } from '../auth/permissions';
+import { pickAssignee } from '../auth/users';
 import { AppError, notFound } from '../errors';
 import { parseDateOnly, todayDateOnly, toDateOnly } from '../lib/dates';
 import {
@@ -24,7 +27,13 @@ const touch = (tx: Tx, requestId: number, data: Prisma.ServiceRequestUpdateInput
   tx.serviceRequest.update({ where: { id: requestId }, data: { ...data, updatedAt: new Date() } });
 
 const addEvent = (tx: Tx, requestId: number, type: string, description: string, o: { actor?: string | null; from?: string | null; to?: string | null } = {}) =>
-  tx.serviceRequestEvent.create({ data: { requestId, type, description, actor: o.actor ?? null, fromStatus: o.from ?? null, toStatus: o.to ?? null } });
+  tx.serviceRequestEvent.create({ data: { requestId, type, description, actor: o.actor ?? null, fromStatus: o.from ?? null, toStatus: o.to ?? null, performedBy: currentActorName() } });
+
+/** אחות ומגשר רואים רק פניות מהקטגוריה שלהם (גם ברשימות) */
+const scopedType = (requested?: string) => {
+  const u = currentUser();
+  return (u && REQUEST_SCOPE[u.role]) ?? requested;
+};
 
 const include = { member: { select: { firstName: true, lastName: true } } } satisfies Prisma.ServiceRequestInclude;
 type RequestFull = Prisma.ServiceRequestGetPayload<{ include: typeof include }>;
@@ -48,7 +57,7 @@ export async function listRequests(query: RequestListQuery) {
   const rows = await prisma.serviceRequest.findMany({
     where: {
       ...(query.status ? { status: query.status } : {}),
-      ...(query.type ? { type: query.type } : {}),
+      ...(scopedType(query.type) ? { type: scopedType(query.type) } : {}),
       ...(query.assignee ? { assignee: query.assignee } : {}),
       ...(query.memberId ? { memberId: query.memberId } : {}),
       ...(query.from || query.to ? { openedAt: { ...(query.from ? { gte: parseDateOnly(query.from) } : {}), ...(query.to ? { lte: parseDateOnly(query.to) } : {}) } } : {}),
@@ -78,6 +87,9 @@ export async function listRequests(query: RequestListQuery) {
 }
 
 export async function createRequest(input: z.infer<typeof requestCreateSchema>) {
+  // שיוך אוטומטי לפי קטגוריה כשלא נבחר אחראי (נבדק לפני הטרנזקציה, כי SQLite עובד בחיבור יחיד)
+  const auto = input.assignee ? null : await pickAssignee(input.type, currentUser());
+  const assignee = input.assignee ?? auto;
   const id = await prisma.$transaction(async (tx) => {
     const member = await tx.member.findUnique({ where: { id: input.memberId } });
     if (!member) throw new AppError(404, 'MEMBER_NOT_FOUND', 'החבר לא נמצא');
@@ -89,11 +101,11 @@ export async function createRequest(input: z.infer<typeof requestCreateSchema>) 
     const r = await tx.serviceRequest.create({
       data: {
         memberId: member.id, type: input.type, subject: input.subject, description: input.description ?? null, openedAt: parseDateOnly(input.openedAt ?? todayDateOnly()),
-        source: input.source, assignee: input.assignee ?? null, priority: input.priority, internalNote: input.internalNote ?? null,
+        source: input.source, assignee: assignee ?? null, priority: input.priority, internalNote: input.internalNote ?? null,
       },
     });
     await addEvent(tx, r.id, 'CREATED', 'הפנייה נפתחה', { to: 'NEW' });
-    if (input.assignee) await addEvent(tx, r.id, 'ASSIGNED', `שויכה ל${input.assignee}`);
+    if (assignee) await addEvent(tx, r.id, 'ASSIGNED', input.assignee ? `שויכה ל${assignee}` : `שויכה אוטומטית ל${assignee} לפי קטגוריית הפנייה`);
     return r.id;
   });
   return getRequest(id);
@@ -194,7 +206,7 @@ export async function linkTreatment(id: number, treatmentId: number) {
 export async function listRequestEvents(id: number) {
   await load(id);
   const rows = await prisma.serviceRequestEvent.findMany({ where: { requestId: id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
-  return rows.map((e) => ({ id: e.id, type: e.type, description: e.description, actor: e.actor, fromStatus: e.fromStatus, toStatus: e.toStatus, createdAt: e.createdAt.toISOString() }));
+  return rows.map((e) => ({ id: e.id, type: e.type, description: e.description, actor: e.actor, performedBy: e.performedBy, fromStatus: e.fromStatus, toStatus: e.toStatus, createdAt: e.createdAt.toISOString() }));
 }
 
 export async function getRelated(id: number) {

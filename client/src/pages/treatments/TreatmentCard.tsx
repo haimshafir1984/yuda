@@ -1,3 +1,5 @@
+import ReadOnlyBanner from '../../components/ReadOnlyBanner';
+import { ReadOnlyScope, useEditState, useIsForeign } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Pencil, Stamp } from 'lucide-react';
 import { useState } from 'react';
@@ -16,6 +18,8 @@ export default function TreatmentCard() {
   const [editing, setEditing] = useState(false);
   const [signing, setSigning] = useState(false);
   const { data: t, isLoading, error, refetch } = useQuery({ queryKey: ['treatment', id], queryFn: () => api.get<Treatment>(`/treatments/${id}`) });
+  const foreign = useIsForeign(t?.socialWorker);
+  const readOnly = useEditState().readOnly || foreign.foreign;
   const sign = useAction(() => api.post(`/treatments/${id}/sign-demo`), { success: 'הטיפול הופעל (סימון ידני לצורך הדגמה)', onSuccess: () => setSigning(false), onError: () => setSigning(false) });
 
   if (isLoading) return <Spinner />;
@@ -48,7 +52,7 @@ export default function TreatmentCard() {
             {t.status === 'PENDING_CONTRACT' && (
               <Button variant="primary" onClick={() => setSigning(true)}><Stamp className="size-4" aria-hidden /> סמן חוזה כחתום לצורך הדגמה</Button>
             )}
-            <Button onClick={() => { setTab('basic'); setEditing(true); }}><Pencil className="size-4" aria-hidden /> עריכה</Button>
+            <Button disabled={readOnly} onClick={() => { setTab('basic'); setEditing(true); }}><Pencil className="size-4" aria-hidden /> עריכה</Button>
             <Button onClick={() => nav('/treatments')}><ArrowRight className="size-4" aria-hidden /> חזרה לרשימה</Button>
           </>
         }
@@ -56,6 +60,8 @@ export default function TreatmentCard() {
       {t.status === 'PENDING_THERAPIST' && <div className="mb-4"><InlineAlert tone="amber">התהליך ממתין להתאמת מטפל. ניתן לשייך מטפל בטאב "פעולות במהלך שפ״ח".</InlineAlert></div>}
       {t.status === 'PENDING_CONTRACT' && <div className="mb-4"><InlineAlert tone="amber">התהליך ממתין לחתימת מטופל על חוזה. במערכת זו אין חתימה דיגיטלית, ולכן ניתן לסמן חתימה ידנית לצורך הדגמה.</InlineAlert></div>}
       {t.status === 'PENDING_EXTENSION_SIGNATURE' && <div className="mb-4"><InlineAlert tone="amber">מכסת הפגישות המאושרת מוצתה, וממתינה הארכה לחתימת המטופל. בטאב "פעולות במהלך שפ״ח" ניתן לסמן את חוזה ההארכה כחתום (הדגמה).</InlineAlert></div>}
+      <ReadOnlyScope readOnly={foreign.foreign} reason={foreign.reason}>
+        <ReadOnlyBanner />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList tabs={tabs} />
         <TabsContent value="basic"><BasicTab key={editing ? 'edit' : 'view'} t={t} editing={editing} setEditing={setEditing} /></TabsContent>
@@ -65,6 +71,7 @@ export default function TreatmentCard() {
         <TabsContent value="actions"><ActionsTab t={t} /></TabsContent>
         <TabsContent value="more"><MoreTab t={t} /></TabsContent>
       </Tabs>
+      </ReadOnlyScope>
       <Dialog
         open={signing}
         onOpenChange={(o) => !sign.isPending && setSigning(o)}

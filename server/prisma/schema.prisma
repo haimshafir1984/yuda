@@ -278,6 +278,7 @@ model TreatmentEvent {
   actor         String? // גורם מעורב
   details       String? // טקסט חופשי, פרטים נוספים
   exceptionKind String? // LATE_PAYMENT | VIOLATION_PAUSE | MANUAL
+  performedBy   String?
   createdAt     DateTime @default(now())
 
   treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
@@ -366,6 +367,7 @@ model ServiceRequestEvent {
   actor       String?
   fromStatus  String?
   toStatus    String?
+  performedBy String?
   createdAt   DateTime @default(now())
 
   request ServiceRequest @relation(fields: [requestId], references: [id])
@@ -479,6 +481,7 @@ model SocialWorkEvent {
   description String
   fromStatus  String?
   toStatus    String?
+  performedBy String?
   createdAt   DateTime @default(now())
 
   process SocialWorkProcess @relation(fields: [processId], references: [id])
@@ -537,4 +540,16 @@ model TreatmentTask {
   treatment PsychologicalTreatment @relation(fields: [treatmentId], references: [id])
 
   @@index([treatmentId])
+}
+
+// ======================= משתמשי מערכת והרשאות =======================
+// כניסה להדגמה בלי סיסמה. ההרשאות נאכפות בשרת לפי התפקיד.
+
+model AppUser {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  // GENERAL_MANAGER | LEAD_SOCIAL_WORKER | SOCIAL_WORKER | NURSE | MEDIATOR | WORKSHOP_MANAGER | PROGRAM_COORDINATOR
+  role      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 }

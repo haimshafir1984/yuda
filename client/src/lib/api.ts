@@ -32,6 +32,7 @@ async function request<T>(method: string, path: string, body?: unknown, params?:
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 401) window.dispatchEvent(new Event('crm-auth-expired'));
     const e = data?.error;
     throw new ApiError(res.status, e?.code ?? 'ERROR', e?.message ?? 'אירעה שגיאה. נסו שוב', e?.details);
   }

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../db';
+import { currentActorName } from '../auth/context';
 import { AppError, notFound } from '../errors';
 import { parseDateOnly, todayDateOnly, toDateOnly } from '../lib/dates';
 import {
@@ -139,7 +140,7 @@ async function changeStatus(tx: Tx, id: number, from: string | null, to: Treatme
 
 const addEvent = (tx: Tx, treatmentId: number, type: string, description: string, o: { date?: Date; actor?: string | null; details?: string | null; exceptionKind?: string | null } = {}) =>
   tx.treatmentEvent.create({
-    data: { treatmentId, type, description, date: o.date ?? new Date(), actor: o.actor ?? null, details: o.details ?? null, exceptionKind: o.exceptionKind ?? null },
+    data: { treatmentId, type, description, date: o.date ?? new Date(), actor: o.actor ?? null, details: o.details ?? null, exceptionKind: o.exceptionKind ?? null, performedBy: currentActorName() },
   });
 
 const withNote = (label: string, note?: string | null) => (note ? `${label} - ${note}` : label);
@@ -504,8 +505,8 @@ export async function setPayment(reportId: number, input: z.infer<typeof payment
 
 // ======================= תצוגות: ציר זמן והיסטוריה =======================
 
-const eventDto = (e: { id: number; type: string; date: Date; description: string; actor: string | null; details: string | null; exceptionKind: string | null }) => ({
-  id: e.id, type: e.type, date: e.date.toISOString(), description: e.description, actor: e.actor, details: e.details, exceptionKind: e.exceptionKind,
+const eventDto = (e: { id: number; type: string; date: Date; description: string; actor: string | null; details: string | null; exceptionKind: string | null; performedBy: string | null }) => ({
+  id: e.id, type: e.type, date: e.date.toISOString(), description: e.description, actor: e.actor, performedBy: e.performedBy, details: e.details, exceptionKind: e.exceptionKind,
 });
 
 export async function getTimeline(id: number) {

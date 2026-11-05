@@ -1,3 +1,4 @@
+import { useCan } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
@@ -11,6 +12,7 @@ import { useStaff } from '../requests/RequestsList';
 
 export default function SocialList() {
   const nav = useNavigate();
+  const canEdit = useCan('socialWork');
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [kind, setKind] = useState('');
@@ -45,7 +47,7 @@ export default function SocialList() {
       <PageHeader
         title="ליווי עו״ס"
         breadcrumbs={[{ label: 'ליווי עו״ס' }]}
-        actions={<Button variant="primary" onClick={() => nav('/social-work/new')}><Plus className="size-4" aria-hidden /> פתח תהליך ליווי חדש</Button>}
+        actions={<Button variant="primary" disabled={!canEdit} title={canEdit ? undefined : 'אין לך הרשאת עריכה'} onClick={() => nav('/social-work/new')}><Plus className="size-4" aria-hidden /> פתח תהליך ליווי חדש</Button>}
       />
       <Card>
         <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 p-3">

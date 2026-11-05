@@ -2,7 +2,10 @@ import cors from 'cors';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import { attachUser, requireAccess } from './auth/middleware';
 import { errorHandler } from './http';
+import { authRouter } from './routes/auth';
+import { meRouter } from './routes/me';
 import { membersRouter } from './routes/members';
 import { publicRouter } from './routes/public';
 import { socialRouter } from './routes/social';
@@ -15,8 +18,13 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
-  app.use('/api/members', membersRouter);
+  // זיהוי המשתמש לכל בקשה. הנתיבים הציבוריים (כניסה, דף החבר, רישום ציבורי) לפני אכיפת ההרשאות
+  app.use('/api', attachUser);
+  app.use('/api/auth', authRouter);
+  app.use('/api/me', meRouter);
   app.use('/api/public', publicRouter);
+  app.use('/api', requireAccess);
+  app.use('/api/members', membersRouter);
   app.use('/api', workshopsRouter);
   app.use('/api', treatmentsRouter);
   app.use('/api', socialRouter);

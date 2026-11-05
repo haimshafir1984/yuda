@@ -254,6 +254,7 @@ export interface TreatmentEvent {
   date: string;
   description: string;
   actor: string | null;
+  performedBy: string | null;
   details: string | null;
   exceptionKind: string | null;
 }
@@ -313,6 +314,7 @@ export interface RequestEvent {
   type: string;
   description: string;
   actor: string | null;
+  performedBy: string | null;
   fromStatus: string | null;
   toStatus: string | null;
   createdAt: string;
@@ -380,6 +382,7 @@ export interface SocialEvent {
   id: number;
   type: string;
   description: string;
+  performedBy: string | null;
   fromStatus: string | null;
   toStatus: string | null;
   createdAt: string;

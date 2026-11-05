@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../db';
+import { currentActorName } from '../auth/context';
 import { AppError, notFound } from '../errors';
 import { parseDateOnly, todayDateOnly, toDateOnly } from '../lib/dates';
 import {
@@ -29,7 +30,7 @@ const ts = (d: Date) => ({ date: d.toISOString().slice(0, 10), time: d.toISOStri
 const parseMeeting = (date: string, time: string) => new Date(`${date}T${time}:00.000Z`);
 
 const event = (tx: Tx, processId: number, type: string, description: string, from?: string | null, to?: string | null) =>
-  tx.socialWorkEvent.create({ data: { processId, type, description, fromStatus: from ?? null, toStatus: to ?? null } });
+  tx.socialWorkEvent.create({ data: { processId, type, description, fromStatus: from ?? null, toStatus: to ?? null, performedBy: currentActorName() } });
 
 // ======================= DTO =======================
 
@@ -140,7 +141,7 @@ export async function createProcess(input: z.infer<typeof processCreateSchema>) 
     });
     await event(tx, p.id, 'OPENED', requestId ? `נפתח תהליך ליווי מפנייה #${requestId}` : 'נפתח תהליך ליווי', null, 'NOT_STARTED');
     if (requestId) {
-      await tx.serviceRequestEvent.create({ data: { requestId, type: 'PROCESS_OPENED', description: `נפתח תהליך ליווי עו"ס #${p.id}` } });
+      await tx.serviceRequestEvent.create({ data: { requestId, type: 'PROCESS_OPENED', description: `נפתח תהליך ליווי עו"ס #${p.id}`, performedBy: currentActorName() } });
       await tx.serviceRequest.update({ where: { id: requestId }, data: { updatedAt: new Date() } });
     }
     return p.id;
@@ -364,7 +365,7 @@ export async function updateReport(id: number, input: z.infer<typeof swReportSch
 export async function listEvents(processId: number) {
   await loadProcess(processId);
   const rows = await prisma.socialWorkEvent.findMany({ where: { processId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
-  return rows.map((e) => ({ id: e.id, type: e.type, description: e.description, fromStatus: e.fromStatus, toStatus: e.toStatus, createdAt: e.createdAt.toISOString() }));
+  return rows.map((e) => ({ id: e.id, type: e.type, description: e.description, performedBy: e.performedBy, fromStatus: e.fromStatus, toStatus: e.toStatus, createdAt: e.createdAt.toISOString() }));
 }
 
 /** קישור לשפ"ח: רק של אותו חבר. השפ"ח עצמו אינו משתנה */

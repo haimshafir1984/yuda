@@ -1,3 +1,4 @@
+import { useCan } from '../../lib/auth';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
@@ -12,6 +13,7 @@ const PAGE_SIZE = 15;
 
 export default function MembersList() {
   const nav = useNavigate();
+  const canEdit = useCan('members');
   const [q, setQ] = useState('');
   const [gender, setGender] = useState('');
   const [ni, setNi] = useState('');
@@ -62,7 +64,7 @@ export default function MembersList() {
         title="חברים"
         breadcrumbs={[{ label: 'חברים' }]}
         actions={
-          <Button variant="primary" onClick={() => nav('/members/new')}>
+          <Button variant="primary" disabled={!canEdit} title={canEdit ? undefined : 'אין לך הרשאת עריכה'} onClick={() => nav('/members/new')}>
             <Plus className="size-4" aria-hidden /> הוסף חבר חדש
           </Button>
         }

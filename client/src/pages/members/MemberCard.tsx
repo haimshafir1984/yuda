@@ -1,3 +1,5 @@
+import ReadOnlyBanner from '../../components/ReadOnlyBanner';
+import { useEditState } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Pencil } from 'lucide-react';
 import { useState } from 'react';
@@ -60,6 +62,7 @@ export default function MemberCard() {
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState('personal');
   const { data: m, isLoading, error, refetch } = useQuery({ queryKey: ['member', id], queryFn: () => api.get<Member>(`/members/${id}`) });
+  const { readOnly } = useEditState();
 
   if (isLoading) return <Spinner />;
   if (error || !m) return <ErrorBlock error={error ?? new Error('החבר לא נמצא')} onRetry={() => refetch()} />;
@@ -95,6 +98,7 @@ export default function MemberCard() {
         actions={
           <>
             <Button
+              disabled={readOnly}
               onClick={() => {
                 setTab('personal');
                 setEditing(true);
@@ -108,6 +112,7 @@ export default function MemberCard() {
           </>
         }
       />
+      <ReadOnlyBanner />
       <Tabs value={activeTab} onValueChange={setTab}>
         <TabsList tabs={tabs} />
         <TabsContent value="personal">

@@ -1,5 +1,6 @@
 import { Prisma, Member } from '@prisma/client';
 import { prisma } from '../db';
+import { currentActorName } from '../auth/context';
 import { AppError, notFound } from '../errors';
 import { ageFromBirthYear, parseDateOnly, tenureFromJoinDate, toDateOnly, todayDateOnly } from '../lib/dates';
 import { normalizePhone } from '../lib/phone';
@@ -339,7 +340,7 @@ export async function listNotes(memberId: number) {
 
 export async function addNote(memberId: number, text: string, author: string | null | undefined) {
   await getMember(memberId);
-  await prisma.memberNote.create({ data: { memberId, text, author: author ?? null } });
+  await prisma.memberNote.create({ data: { memberId, text, author: author ?? currentActorName() } });
   return listNotes(memberId);
 }
 

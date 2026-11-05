@@ -1,3 +1,4 @@
+import { useCan } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
@@ -12,6 +13,7 @@ export const useStaff = () => useQuery({ queryKey: ['service-meta'], queryFn: ()
 
 export default function RequestsList() {
   const nav = useNavigate();
+  const canEdit = useCan('requests');
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [type, setType] = useState('');
@@ -53,7 +55,7 @@ export default function RequestsList() {
       <PageHeader
         title="פניות ובקשות סיוע"
         breadcrumbs={[{ label: 'פניות ובקשות סיוע' }]}
-        actions={<Button variant="primary" onClick={() => nav('/requests/new')}><Plus className="size-4" aria-hidden /> פנייה חדשה</Button>}
+        actions={<Button variant="primary" disabled={!canEdit} title={canEdit ? undefined : 'אין לך הרשאת עריכה'} onClick={() => nav('/requests/new')}><Plus className="size-4" aria-hidden /> פנייה חדשה</Button>}
       />
       <Card>
         <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 p-3">

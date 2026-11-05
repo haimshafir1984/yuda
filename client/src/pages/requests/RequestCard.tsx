@@ -1,3 +1,5 @@
+import ReadOnlyBanner from '../../components/ReadOnlyBanner';
+import { ReadOnlyScope, useEditState, useIsForeign } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Pencil } from 'lucide-react';
 import { ReactNode, useState } from 'react';
@@ -235,7 +237,7 @@ function HistoryTab({ id }: { id: number }) {
     { key: 'd', header: 'תאריך ושעה', cell: (e) => fmtDateTime(e.createdAt) },
     { key: 't', header: 'סוג פעולה', cell: (e) => <Badge>{requestEventLabel[e.type] ?? e.type}</Badge> },
     { key: 'x', header: 'תיאור', cell: (e) => e.description },
-    { key: 'a', header: 'מבצע הפעולה', cell: (e) => e.actor ?? '—' },
+    { key: 'a', header: 'מבצע הפעולה', cell: (e) => e.performedBy ?? e.actor ?? '—' },
     { key: 's', header: 'סטטוס קודם ← חדש', cell: (e) => (e.toStatus ? `${e.fromStatus ? requestStatusLabel[e.fromStatus] : '—'} ← ${requestStatusLabel[e.toStatus]}` : '—') },
   ];
   return <Card><DataTable caption="היסטוריית פעולות" columns={columns} rows={q.data!} rowKey={(e) => e.id} empty={<EmptyState title="אין פעולות" />} /></Card>;
@@ -276,6 +278,8 @@ export default function RequestCard() {
   const [tab, setTab] = useState('details');
   const [editing, setEditing] = useState(false);
   const { data: r, isLoading, error, refetch } = useQuery({ queryKey: ['service-request', id], queryFn: () => api.get<ServiceRequest>(`/service-requests/${id}`) });
+  const foreign = useIsForeign(r?.assignee);
+  const readOnly = useEditState().readOnly || foreign.foreign;
   if (isLoading) return <Spinner />;
   if (error || !r) return <ErrorBlock error={error ?? new Error('הפנייה לא נמצאה')} onRetry={() => refetch()} />;
   const tabs = [
@@ -295,8 +299,10 @@ export default function RequestCard() {
             <span>אחראי: {r.assignee ?? 'לא שויך'}</span>
           </span>
         }
-        actions={<><Button onClick={() => { setTab('details'); setEditing(true); }}><Pencil className="size-4" aria-hidden /> עריכה</Button><Button onClick={() => nav('/requests')}><ArrowRight className="size-4" aria-hidden /> חזרה לרשימה</Button></>}
+        actions={<><Button disabled={readOnly} onClick={() => { setTab('details'); setEditing(true); }}><Pencil className="size-4" aria-hidden /> עריכה</Button><Button onClick={() => nav('/requests')}><ArrowRight className="size-4" aria-hidden /> חזרה לרשימה</Button></>}
       />
+      <ReadOnlyScope readOnly={foreign.foreign} reason={foreign.reason}>
+        <ReadOnlyBanner />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList tabs={tabs} />
         <TabsContent value="details"><DetailsTab key={editing ? 'e' : 'v'} r={r} editing={editing} setEditing={setEditing} /></TabsContent>
@@ -304,6 +310,7 @@ export default function RequestCard() {
         <TabsContent value="history"><HistoryTab id={r.id} /></TabsContent>
         <TabsContent value="related"><RelatedTab id={r.id} /></TabsContent>
       </Tabs>
+      </ReadOnlyScope>
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { SOCIAL_WORKER_ROLES, assignableNames } from '../auth/users';
 import { asyncHandler, idParam } from '../http';
 import * as svc from '../services/treatmentService';
 import {
@@ -13,7 +14,10 @@ const r = treatmentsRouter;
 r.get('/therapists', asyncHandler(async (req, res) => res.json(await svc.listTherapists(req.query.activeOnly === 'true'))));
 r.post('/therapists', asyncHandler(async (req, res) => res.status(201).json(await svc.createTherapist(therapistSchema.parse(req.body)))));
 r.put('/therapists/:id', asyncHandler(async (req, res) => res.json(await svc.updateTherapist(idParam(req), therapistSchema.parse(req.body)))));
-r.get('/treatment-meta', asyncHandler(async (_req, res) => res.json({ socialWorkers: svc.SOCIAL_WORKERS })));
+r.get('/treatment-meta', asyncHandler(async (_req, res) => {
+  const names = await assignableNames(SOCIAL_WORKER_ROLES);
+  res.json({ socialWorkers: names.length ? names : svc.SOCIAL_WORKERS });
+}));
 
 // תהליכי שפ"ח
 r.get(

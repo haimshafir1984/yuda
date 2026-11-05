@@ -1,8 +1,13 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { ReactNode } from 'react';
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
+import { Card, EmptyState, Spinner } from './components/ui';
+import { Area, useAuth } from './lib/auth';
+import LoginPage from './pages/LoginPage';
 import MemberCard from './pages/members/MemberCard';
 import MemberCreate from './pages/members/MemberCreate';
 import MembersList from './pages/members/MembersList';
+import MyEvents from './pages/MyEvents';
 import PublicRegister from './pages/PublicRegister';
 import RequestCard from './pages/requests/RequestCard';
 import RequestCreate from './pages/requests/RequestCreate';
@@ -18,30 +23,65 @@ import WorkshopCard from './pages/workshops/WorkshopCard';
 import WorkshopCreate from './pages/workshops/WorkshopCreate';
 import WorkshopsList from './pages/workshops/WorkshopsList';
 
+/** בלי משתמש מחובר מוצג מסך הכניסה להדגמה */
+function AuthGate() {
+  const { me, loading } = useAuth();
+  if (loading) return <Spinner />;
+  if (!me?.user) return <LoginPage />;
+  return <Outlet />;
+}
+
+function NoAccess() {
+  return (
+    <Card className="p-10">
+      <EmptyState title="אין לך הרשאה לאזור זה" text="התפקיד שלך אינו כולל גישה לאזור הזה. ניתן להחליף משתמש מהתפריט העליון." />
+    </Card>
+  );
+}
+
+const Guard = ({ area, children }: { area: Area; children: ReactNode }) => {
+  const { can } = useAuth();
+  return can(area) ? <>{children}</> : <NoAccess />;
+};
+
+/** דף הבית: האזור הראשון שהתפקיד מורשה אליו */
+function Home() {
+  const { can } = useAuth();
+  const first = (
+    [['members', '/members'], ['workshops', '/workshops'], ['requests', '/requests'], ['treatments', '/treatments'], ['socialWork', '/social-work']] as [Area, string][]
+  ).find(([area]) => can(area));
+  return first ? <Navigate to={first[1]} replace /> : <NoAccess />;
+}
+
+const g = (area: Area, el: ReactNode) => <Guard area={area}>{el}</Guard>;
+
 export default function App() {
   return (
     <Routes>
-      {/* דף הרישום המדומה הוא מסך נפרד מה-CRM */}
+      {/* דפים ציבוריים, בלי כניסת צוות: הרישום המדומה ודף האירועים של החבר */}
       <Route path="/register/:id" element={<PublicRegister />} />
-      <Route element={<Layout />}>
-        <Route path="/" element={<Navigate to="/members" replace />} />
-        <Route path="/members" element={<MembersList />} />
-        <Route path="/members/new" element={<MemberCreate />} />
-        <Route path="/members/:id" element={<MemberCard />} />
-        <Route path="/workshops" element={<WorkshopsList />} />
-        <Route path="/workshops/new" element={<WorkshopCreate />} />
-        <Route path="/workshops/:id" element={<WorkshopCard />} />
-        <Route path="/treatments" element={<TreatmentsList />} />
-        <Route path="/treatments/new" element={<TreatmentCreate />} />
-        <Route path="/treatments/:id" element={<TreatmentCard />} />
-        <Route path="/requests" element={<RequestsList />} />
-        <Route path="/requests/new" element={<RequestCreate />} />
-        <Route path="/requests/:id" element={<RequestCard />} />
-        <Route path="/social-work" element={<SocialList />} />
-        <Route path="/social-work/new" element={<SocialCreate />} />
-        <Route path="/social-work/:id" element={<SocialCard />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/members" replace />} />
+      <Route path="/my-events" element={<MyEvents />} />
+      <Route element={<AuthGate />}>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/members" element={g('members', <MembersList />)} />
+          <Route path="/members/new" element={g('members', <MemberCreate />)} />
+          <Route path="/members/:id" element={g('members', <MemberCard />)} />
+          <Route path="/workshops" element={g('workshops', <WorkshopsList />)} />
+          <Route path="/workshops/new" element={g('workshops', <WorkshopCreate />)} />
+          <Route path="/workshops/:id" element={g('workshops', <WorkshopCard />)} />
+          <Route path="/treatments" element={g('treatments', <TreatmentsList />)} />
+          <Route path="/treatments/new" element={g('treatments', <TreatmentCreate />)} />
+          <Route path="/treatments/:id" element={g('treatments', <TreatmentCard />)} />
+          <Route path="/requests" element={g('requests', <RequestsList />)} />
+          <Route path="/requests/new" element={g('requests', <RequestCreate />)} />
+          <Route path="/requests/:id" element={g('requests', <RequestCard />)} />
+          <Route path="/social-work" element={g('socialWork', <SocialList />)} />
+          <Route path="/social-work/new" element={g('socialWork', <SocialCreate />)} />
+          <Route path="/social-work/:id" element={g('socialWork', <SocialCard />)} />
+          <Route path="/settings" element={g('settings', <SettingsPage />)} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Route>
     </Routes>
   );

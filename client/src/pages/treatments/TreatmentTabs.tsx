@@ -1,3 +1,4 @@
+import { useCan } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, Plus } from 'lucide-react';
 import { ReactNode, useState } from 'react';
@@ -177,6 +178,7 @@ function ReportDialog({ t, report, open, onClose }: { t: Treatment; report: Mont
 }
 
 export function TimelineTab({ t }: { t: Treatment }) {
+  const canManage = useCan('treatments', 3); // אישור סטטוס תשלום דורש הרשאת ניהול
   const q = useQuery({ queryKey: ['treatment-timeline', t.id], queryFn: () => api.get<Timeline>(`/treatments/${t.id}/timeline`) });
   const [editing, setEditing] = useState<{ report: MonthlyReport | null } | null>(null);
   const [approving, setApproving] = useState<MonthlyReport | null>(null);
@@ -213,7 +215,7 @@ export function TimelineTab({ t }: { t: Treatment }) {
     {
       key: 'tp', header: 'תשלום למטפל',
       cell: (r) => r.status === 'APPROVED' ? (
-        <Select aria-label={`סטטוס תשלום למטפל ${fmtMonth(r.year, r.month)}`} className="w-48" value={r.therapistPaymentStatus} onChange={(e) => pay.mutate({ r, patch: { therapistPaymentStatus: e.target.value } })}>
+        <Select aria-label={`סטטוס תשלום למטפל ${fmtMonth(r.year, r.month)}`} className="w-48" disabled={!canManage} value={r.therapistPaymentStatus} onChange={(e) => pay.mutate({ r, patch: { therapistPaymentStatus: e.target.value } })}>
           {Object.entries(therapistPaymentLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </Select>
       ) : '—',
@@ -221,7 +223,7 @@ export function TimelineTab({ t }: { t: Treatment }) {
     {
       key: 'cpp', header: 'תשלום השתתפות עצמית',
       cell: (r) => r.status === 'APPROVED' ? (
-        <Select aria-label={`סטטוס השתתפות עצמית ${fmtMonth(r.year, r.month)}`} className="w-32" value={r.copayPaymentStatus} onChange={(e) => pay.mutate({ r, patch: { copayPaymentStatus: e.target.value } })}>
+        <Select aria-label={`סטטוס השתתפות עצמית ${fmtMonth(r.year, r.month)}`} className="w-32" disabled={!canManage} value={r.copayPaymentStatus} onChange={(e) => pay.mutate({ r, patch: { copayPaymentStatus: e.target.value } })}>
           {Object.entries(copayPaymentLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
         </Select>
       ) : '—',
@@ -581,6 +583,7 @@ export function ActionsTab({ t }: { t: Treatment }) {
     { key: 't', header: 'סוג פעולה', cell: (e) => <Badge tone={e.exceptionKind ? 'amber' : 'gray'}>{eventTypeLabel[e.type] ?? e.type}</Badge> },
     { key: 'x', header: 'תיאור קצר', cell: (e) => e.description },
     { key: 'a', header: 'גורם מעורב', cell: (e) => e.actor ?? '—' },
+    { key: 'by', header: 'בוצע על ידי', cell: (e) => e.performedBy ?? '—' },
     { key: 'v', header: 'פעולה', cell: (e) => <Button size="sm" onClick={() => setView(e)}>פרטים</Button> },
   ];
 

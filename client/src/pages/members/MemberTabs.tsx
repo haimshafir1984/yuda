@@ -1,3 +1,4 @@
+import { useCan } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { ReactNode, useState } from 'react';
@@ -280,7 +281,8 @@ const exceptionLabel: Record<AnyException['type'], { text: string; tone: 'amber'
 export function ExceptionsTab({ memberId }: { memberId: number }) {
   const nav = useNavigate();
   const q = useQuery({ queryKey: ['member-exceptions', memberId], queryFn: () => api.get<ExceptionRow[]>(`/members/${memberId}/exceptions`) });
-  const tq = useQuery({ queryKey: ['member-treatment-exceptions', memberId], queryFn: () => api.get<TreatmentExceptionRow[]>(`/members/${memberId}/treatment-exceptions`) });
+  const canT = useCan('treatments', 1);
+  const tq = useQuery({ queryKey: ['member-treatment-exceptions', memberId], queryFn: () => api.get<TreatmentExceptionRow[]>(`/members/${memberId}/treatment-exceptions`), enabled: canT });
   if (q.isLoading || tq.isLoading) return <Spinner />;
   if (q.error || tq.error) return <ErrorBlock error={q.error ?? tq.error} onRetry={() => { void q.refetch(); void tq.refetch(); }} />;
 
@@ -315,15 +317,17 @@ export function ExceptionsTab({ memberId }: { memberId: number }) {
 /** טאב "שירותים סוציאליים": שלושה אזורים, כל אחד טבלה: שפ״ח, ליווי עו״ס ופניות (כולל שהסתיימו) */
 export function SocialServicesTab({ member }: { member: Member }) {
   const nav = useNavigate();
-  const q = useQuery({ queryKey: ['member-treatments', member.id], queryFn: () => api.get<Treatment[]>(`/members/${member.id}/treatments`) });
-  const sw = useQuery({ queryKey: ['member-social-work', member.id], queryFn: () => api.get<SocialProcess[]>(`/members/${member.id}/social-work`) });
-  const rq = useQuery({ queryKey: ['member-service-requests', member.id], queryFn: () => api.get<ServiceRequest[]>(`/members/${member.id}/service-requests`) });
-  const notes = useQuery({ queryKey: ['member-notes', member.id], queryFn: () => api.get<MemberNote[]>(`/members/${member.id}/notes`) });
+  const canT = useCan('treatments', 1);
+  const canS = useCan('socialWork', 1);
+  const canR = useCan('requests', 1);
+  const q = useQuery({ queryKey: ['member-treatments', member.id], queryFn: () => api.get<Treatment[]>(`/members/${member.id}/treatments`), enabled: canT });
+  const sw = useQuery({ queryKey: ['member-social-work', member.id], queryFn: () => api.get<SocialProcess[]>(`/members/${member.id}/social-work`), enabled: canS });
+  const rq = useQuery({ queryKey: ['member-service-requests', member.id], queryFn: () => api.get<ServiceRequest[]>(`/members/${member.id}/service-requests`), enabled: canR });
+  const notes = useQuery({ queryKey: ['member-notes', member.id], queryFn: () => api.get<MemberNote[]>(`/members/${member.id}/notes`), enabled: canS });
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
-  const [noteAuthor, setNoteAuthor] = useState('');
   const [noteError, setNoteError] = useState('');
-  const addNote = useAction(() => api.post(`/members/${member.id}/notes`, { text: noteText, author: noteAuthor }), {
+  const addNote = useAction(() => api.post(`/members/${member.id}/notes`, { text: noteText }), {
     success: 'ההערה נשמרה', onSuccess: () => { setNoteOpen(false); setNoteText(''); setNoteError(''); },
   });
   if (q.isLoading || sw.isLoading || rq.isLoading) return <Spinner />;
@@ -369,7 +373,7 @@ export function SocialServicesTab({ member }: { member: Member }) {
   ];
   const hasOpenT = (q.data ?? []).some((t) => t.status !== 'FINISHED');
 
-  const Section = ({ title, button, children }: { title: string; button: ReactNode; children: ReactNode }) => (
+  const Section = ({ title, button, children, hidden }: { title: string; button: ReactNode; children: ReactNode; hidden?: boolean }) => hidden ? null : (
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-3">
         <h2 className="font-semibold text-slate-900">{title}</h2>
@@ -380,25 +384,24 @@ export function SocialServicesTab({ member }: { member: Member }) {
   );
   return (
     <div className="space-y-5">
-      <Section title="תהליכי שפ״ח (ליווי טיפול פסיכולוגי חיצוני)" button={
+      <Section hidden={!canT} title="תהליכי שפ״ח (ליווי טיפול פסיכולוגי חיצוני)" button={
         <Button variant="primary" size="sm" disabled={hasOpenT} title={hasOpenT ? 'לחבר כבר קיים תהליך שפ״ח שטרם הסתיים' : undefined} onClick={() => nav(`/treatments/new?memberId=${member.id}`)}>
           <Plus className="size-4" aria-hidden /> פתח תהליך שפ״ח חדש
         </Button>}>
         <DataTable caption="תהליכי שפ״ח של החבר" columns={tCols} rows={q.data ?? []} rowKey={(t) => t.id} onRowClick={openT} empty={<EmptyState title="אין תהליכי שפ״ח" text="לחבר לא נפתח תהליך ליווי טיפול פסיכולוגי." />} />
       </Section>
-      <Section title="תהליכי ליווי עו״ס" button={<Button variant="primary" size="sm" onClick={() => nav(`/social-work/new?memberId=${member.id}`)}><Plus className="size-4" aria-hidden /> פתח תהליך ליווי חדש</Button>}>
+      <Section hidden={!canS} title="תהליכי ליווי עו״ס" button={<Button variant="primary" size="sm" onClick={() => nav(`/social-work/new?memberId=${member.id}`)}><Plus className="size-4" aria-hidden /> פתח תהליך ליווי חדש</Button>}>
         <DataTable caption="תהליכי ליווי עו״ס של החבר" columns={sCols} rows={sw.data ?? []} rowKey={(p) => p.id} onRowClick={openS} empty={<EmptyState title="אין תהליכי ליווי עו״ס" />} />
       </Section>
-      <Section title="פניות ובקשות סיוע" button={<Button variant="primary" size="sm" onClick={() => nav(`/requests/new?memberId=${member.id}`)}><Plus className="size-4" aria-hidden /> פנייה חדשה</Button>}>
+      <Section hidden={!canR} title="פניות ובקשות סיוע" button={<Button variant="primary" size="sm" onClick={() => nav(`/requests/new?memberId=${member.id}`)}><Plus className="size-4" aria-hidden /> פנייה חדשה</Button>}>
         <DataTable caption="פניות ובקשות סיוע של החבר" columns={rCols} rows={rq.data ?? []} rowKey={(r) => r.id} onRowClick={openR} empty={<EmptyState title="אין פניות" />} />
       </Section>
-      <Section title="הערות העו״סית בכרטיס החבר" button={<Button variant="primary" size="sm" onClick={() => { setNoteError(''); setNoteOpen(true); }}><Plus className="size-4" aria-hidden /> הוסף הערה</Button>}>
+      <Section hidden={!canS} title="הערות העו״סית בכרטיס החבר" button={<Button variant="primary" size="sm" onClick={() => { setNoteError(''); setNoteOpen(true); }}><Plus className="size-4" aria-hidden /> הוסף הערה</Button>}>
         <DataTable caption="הערות עו״סית" columns={noteCols} rows={notes.data ?? []} rowKey={(n) => n.id} empty={<EmptyState title="אין הערות" text="הערות שהעו״סית כותבת ישירות בכרטיס החבר." />} />
       </Section>
       <Dialog open={noteOpen} onOpenChange={(o) => !o && !addNote.isPending && setNoteOpen(false)} title="הערה חדשה"
         footer={<><Button variant="primary" loading={addNote.isPending} onClick={() => (noteText.trim() ? addNote.mutate(undefined) : setNoteError('יש להזין טקסט'))}>שמירה</Button><Button onClick={() => setNoteOpen(false)} disabled={addNote.isPending}>ביטול</Button></>}>
         <div className="space-y-4">
-          <Field label="נכתב על ידי"><Select value={noteAuthor} onChange={(e) => setNoteAuthor(e.target.value)}><option value="">לא צוין</option><option>אורית לביא</option><option>רונית כץ</option><option>שירה אדלר</option></Select></Field>
           <Field label="הערה" required error={noteError}><Textarea className="min-h-28" value={noteText} onChange={(e) => { setNoteText(e.target.value); setNoteError(''); }} /></Field>
           <p className="text-xs text-slate-500">ההערה נשמרת בטבלה נפרדת ואינה מופיעה בטבלת החברים הראשית.</p>
         </div>
@@ -410,7 +413,9 @@ export function SocialServicesTab({ member }: { member: Member }) {
 /** כרטסת: אזור בסיסי של השתתפות עצמית בשפ״ח, נגזר מדיווחים מאושרים */
 export function LedgerTab({ memberId }: { memberId: number }) {
   const nav = useNavigate();
-  const q = useQuery({ queryKey: ['member-treatment-copay', memberId], queryFn: () => api.get<MemberCopayRow[]>(`/members/${memberId}/treatment-copay`) });
+  const canT = useCan('treatments', 1);
+  const q = useQuery({ queryKey: ['member-treatment-copay', memberId], queryFn: () => api.get<MemberCopayRow[]>(`/members/${memberId}/treatment-copay`), enabled: canT });
+  if (!canT) return <Card><EmptyState title="אין הרשאה לצפות בנתוני שפ״ח" text="השתתפות עצמית בשפ״ח מוצגת רק לתפקידים עם גישה לשפ״ח." /></Card>;
   if (q.isLoading) return <Spinner />;
   if (q.error) return <ErrorBlock error={q.error} onRetry={() => q.refetch()} />;
   const rows = q.data ?? [];

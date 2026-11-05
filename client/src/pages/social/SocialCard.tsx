@@ -1,3 +1,5 @@
+import ReadOnlyBanner from '../../components/ReadOnlyBanner';
+import { ReadOnlyScope, useEditState, useIsForeign } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Pencil, Plus } from 'lucide-react';
 import { ReactNode, useState } from 'react';
@@ -402,6 +404,7 @@ function HistoryTab({ id }: { id: number }) {
     { key: 'd', header: 'תאריך ושעה', cell: (e) => fmtDateTime(e.createdAt) },
     { key: 't', header: 'פעולה', cell: (e) => <Badge>{socialEventLabel[e.type] ?? e.type}</Badge> },
     { key: 'x', header: 'פרטים', cell: (e) => e.description },
+    { key: 'by', header: 'בוצע על ידי', cell: (e) => e.performedBy ?? '—' },
     { key: 's', header: 'סטטוס קודם ← חדש', cell: (e) => (e.toStatus ? `${e.fromStatus ? socialStatusLabel[e.fromStatus] : '—'} ← ${socialStatusLabel[e.toStatus]}` : '—') },
   ];
   return <Card><DataTable caption="היסטוריית התהליך" columns={columns} rows={q.data!} rowKey={(e) => e.id} empty={<EmptyState title="אין אירועים" />} /></Card>;
@@ -418,6 +421,8 @@ export default function SocialCard() {
   const [fin, setFin] = useState({ reason: 'GOAL_ACHIEVED', summary: '', endDate: todayStr() });
   const [finErr, setFinErr] = useState('');
   const { data: p, isLoading, error, refetch } = useQuery({ queryKey: ['social-process', id], queryFn: () => api.get<SocialProcess>(`/social-work/processes/${id}`) });
+  const foreign = useIsForeign(p?.socialWorker);
+  const readOnly = useEditState().readOnly || foreign.foreign;
 
   const activate = useAction(() => api.post(`/social-work/processes/${id}/activate`), { success: 'התהליך הופעל' });
   const unfreeze = useAction(() => api.post(`/social-work/processes/${id}/unfreeze`), { success: 'התהליך הוצא מהקפאה' });
@@ -458,11 +463,13 @@ export default function SocialCard() {
             {p.status === 'FROZEN' && <Button loading={unfreeze.isPending} onClick={() => unfreeze.mutate(undefined)}>הוצא מהקפאה</Button>}
             {p.status !== 'FINISHED' && <Button variant="danger" onClick={() => { setFinErr(''); setDialog('finish'); }}>סיים תהליך</Button>}
             {p.status === 'FINISHED' && <Button variant="primary" onClick={() => { setNote(''); setDialog('reopen'); }}>פתח מחדש</Button>}
-            <Button onClick={() => { setTab('general'); setEditing(true); }}><Pencil className="size-4" aria-hidden /> עריכה</Button>
+            <Button disabled={readOnly} onClick={() => { setTab('general'); setEditing(true); }}><Pencil className="size-4" aria-hidden /> עריכה</Button>
             <Button onClick={() => nav('/social-work')}><ArrowRight className="size-4" aria-hidden /> חזרה לרשימה</Button>
           </>
         }
       />
+      <ReadOnlyScope readOnly={foreign.foreign} reason={foreign.reason}>
+        <ReadOnlyBanner />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList tabs={tabs} />
         <TabsContent value="general"><GeneralTab key={editing ? 'e' : 'v'} p={p} editing={editing} setEditing={setEditing} /></TabsContent>
@@ -472,6 +479,7 @@ export default function SocialCard() {
         <TabsContent value="related"><RelatedTab p={p} /></TabsContent>
         <TabsContent value="history"><HistoryTab id={p.id} /></TabsContent>
       </Tabs>
+      </ReadOnlyScope>
 
       <Dialog open={dialog === 'freeze' || dialog === 'reopen'} onOpenChange={(o) => !o && !act.isPending && setDialog(null)} title={dialog === 'freeze' ? 'הקפאת תהליך' : 'פתיחה מחדש של תהליך'}
         footer={<><Button variant="primary" loading={act.isPending} onClick={() => act.mutate(undefined)}>אישור</Button><Button onClick={() => setDialog(null)} disabled={act.isPending}>ביטול</Button></>}>

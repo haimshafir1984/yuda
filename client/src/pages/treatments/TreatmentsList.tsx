@@ -1,3 +1,4 @@
+import { useCan } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, Users } from 'lucide-react';
 import { useState } from 'react';
@@ -11,6 +12,7 @@ import TherapistsDialog from './TherapistsDialog';
 
 export default function TreatmentsList() {
   const nav = useNavigate();
+  const canEdit = useCan('treatments');
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [track, setTrack] = useState('');
@@ -57,7 +59,7 @@ export default function TreatmentsList() {
         breadcrumbs={[{ label: 'שפ״ח' }]}
         actions={
           <>
-            <Button variant="primary" onClick={() => nav('/treatments/new')}>
+            <Button variant="primary" disabled={!canEdit} title={canEdit ? undefined : 'אין לך הרשאת עריכה'} onClick={() => nav('/treatments/new')}>
               <Plus className="size-4" aria-hidden /> פתיחת תהליך שפ״ח חדש
             </Button>
             <Button onClick={() => setTherapists(true)}>

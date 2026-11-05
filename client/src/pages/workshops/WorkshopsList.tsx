@@ -1,3 +1,4 @@
+import { useCan } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarPlus, Plus, Search } from 'lucide-react';
 import { useState } from 'react';
@@ -12,6 +13,7 @@ export const statusTone = (s: string) => (s === 'ONGOING' ? 'green' : s === 'PUB
 
 export default function WorkshopsList() {
   const nav = useNavigate();
+  const canEdit = useCan('workshops');
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [kind, setKind] = useState('');
@@ -70,10 +72,10 @@ export default function WorkshopsList() {
         breadcrumbs={[{ label: 'סדנאות ואירועים' }]}
         actions={
           <>
-            <Button variant="primary" onClick={() => nav('/workshops/new?kind=WORKSHOP')}>
+            <Button variant="primary" disabled={!canEdit} title={canEdit ? undefined : 'אין לך הרשאת עריכה'} onClick={() => nav('/workshops/new?kind=WORKSHOP')}>
               <Plus className="size-4" aria-hidden /> סדנה חדשה
             </Button>
-            <Button onClick={() => nav('/workshops/new?kind=EVENT')}>
+            <Button disabled={!canEdit} title={canEdit ? undefined : 'אין לך הרשאת עריכה'} onClick={() => nav('/workshops/new?kind=EVENT')}>
               <CalendarPlus className="size-4" aria-hidden /> אירוע חדש
             </Button>
           </>

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncHandler, idParam } from '../http';
 import * as req from '../services/serviceRequestService';
 import * as sw from '../services/socialWorkService';
+import { STAFF_ROLES, assignableNames } from '../auth/users';
 import { SOCIAL_WORKERS } from '../services/treatmentService';
 import {
   assignSchema, contactSchema, decisionSchema, finishSocialSchema, interventionSchema, linkTreatmentSchema, meetingSchema, noteOptSchema,
@@ -12,7 +13,10 @@ export const socialRouter = Router();
 const r = socialRouter;
 const q = (v: unknown) => (typeof v === 'string' ? v : undefined);
 
-r.get('/service-meta', asyncHandler(async (_req, res) => res.json({ staff: SOCIAL_WORKERS })));
+r.get('/service-meta', asyncHandler(async (_req, res) => {
+  const names = await assignableNames(STAFF_ROLES);
+  res.json({ staff: names.length ? names : SOCIAL_WORKERS });
+}));
 
 // ----- פניות -----
 r.get('/service-requests', asyncHandler(async (rq, res) => {

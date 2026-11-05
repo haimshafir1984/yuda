@@ -1,15 +1,19 @@
 import clsx from 'clsx';
-import { CalendarDays, ClipboardList, HeartHandshake, LifeBuoy, Menu, Settings, Users } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { CalendarDays, ClipboardList, HeartHandshake, LifeBuoy, LogOut, Menu, Settings, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { api } from '../lib/api';
+import { Area, useAuth } from '../lib/auth';
+import { useAction } from './toast';
 
-const NAV = [
-  { to: '/members', label: 'חברים', icon: Users },
-  { to: '/workshops', label: 'סדנאות ואירועים', icon: CalendarDays },
-  { to: '/treatments', label: 'ליווי טיפול פסיכולוגי (שפ"ח)', icon: HeartHandshake },
-  { to: '/requests', label: 'פניות ובקשות סיוע', icon: ClipboardList },
-  { to: '/social-work', label: 'ליווי עו"ס', icon: LifeBuoy },
-  { to: '/settings', label: 'הגדרות', icon: Settings },
+const NAV: { to: string; label: string; icon: typeof Users; area: Area }[] = [
+  { to: '/members', label: 'חברים', icon: Users, area: 'members' },
+  { to: '/workshops', label: 'סדנאות ואירועים', icon: CalendarDays, area: 'workshops' },
+  { to: '/treatments', label: 'ליווי טיפול פסיכולוגי (שפ"ח)', icon: HeartHandshake, area: 'treatments' },
+  { to: '/requests', label: 'פניות ובקשות סיוע', icon: ClipboardList, area: 'requests' },
+  { to: '/social-work', label: 'ליווי עו"ס', icon: LifeBuoy, area: 'socialWork' },
+  { to: '/settings', label: 'הגדרות', icon: Settings, area: 'settings' },
 ];
 
 const readCollapsed = () => {
@@ -24,6 +28,11 @@ export default function Layout() {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { me, can } = useAuth();
+  const qc = useQueryClient();
+  const nav = NAV.filter((n) => can(n.area));
+  // החלפת משתמש: מנקים את הנתונים של המשתמש הקודם ומציגים את מסך הכניסה
+  const logout = useAction(() => api.post('/auth/logout'), { onSuccess: () => qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' }) });
 
   useEffect(() => setMobileOpen(false), [location.pathname]);
 
@@ -60,6 +69,18 @@ export default function Layout() {
           </span>
           <span className="text-lg font-bold text-slate-900">החצר של יודה</span>
         </div>
+        {me?.user && (
+          <div className="ms-auto flex items-center gap-2 text-sm">
+            <span className="hidden text-slate-600 sm:inline">
+              {me.user.name} <span className="text-slate-400">·</span> {me.user.roleLabel}
+            </span>
+            {!me.authDisabled && (
+              <button type="button" onClick={() => logout.mutate(undefined)} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-2.5 py-1.5 text-slate-700 hover:bg-slate-50">
+                <LogOut className="size-4" aria-hidden /> החלפת משתמש
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       <div className="relative flex flex-1">
@@ -72,7 +93,7 @@ export default function Layout() {
           )}
         >
           <nav aria-label="תפריט ראשי" className="flex flex-col gap-1">
-            {NAV.map(({ to, label, icon: Icon }) => (
+            {nav.map(({ to, label, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
