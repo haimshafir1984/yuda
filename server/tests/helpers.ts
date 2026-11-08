@@ -3,6 +3,9 @@ import { prisma } from '../src/db';
 /** מנקה את כל הטבלאות לפי סדר תלויות (בסיס נתונים נפרד לבדיקות בלבד) */
 export async function resetDb() {
   await prisma.appUser.deleteMany();
+  await prisma.outboxMessage.deleteMany();
+  await prisma.scheduledJob.deleteMany();
+  await prisma.messageTemplate.deleteMany();
   await prisma.memberNote.deleteMany();
   await prisma.treatmentMeeting.deleteMany();
   await prisma.treatmentTask.deleteMany();

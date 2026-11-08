@@ -553,3 +553,52 @@ model AppUser {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 }
+
+// ======================= מנוע הודעות ומתזמן =======================
+// הודעות נשלחות דרך ספק (בהדגמה: ספק "תיבת יוצאות" ששומר ולא שולח בפועל). כל ניסיון נשמר.
+
+model MessageTemplate {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique // מזהה קבוע בקוד, למשל registration.confirmed
+  name      String
+  subject   String? // למייל בלבד
+  body      String // טקסט עם משתנים בצורה {{שם}}
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model OutboxMessage {
+  id          Int       @id @default(autoincrement())
+  memberId    Int?
+  channel     String // SMS | EMAIL
+  toAddress   String? // טלפון או מייל בזמן השליחה
+  templateKey String?
+  subject     String?
+  body        String
+  status      String    @default("QUEUED") // QUEUED | SENT | FAILED | SKIPPED
+  error       String?
+  attempts    Int       @default(0)
+  provider    String? // איזה ספק טיפל
+  relatedType String? // WORKSHOP | REGISTRATION ...
+  relatedId   Int?
+  createdAt   DateTime  @default(now())
+  sentAt      DateTime?
+
+  @@index([status])
+  @@index([memberId])
+}
+
+model ScheduledJob {
+  id        Int       @id @default(autoincrement())
+  type      String // שם המטפל, למשל workshop.reminder
+  runAt     DateTime
+  payload   String // JSON
+  status    String    @default("PENDING") // PENDING | DONE | FAILED | CANCELLED
+  attempts  Int       @default(0)
+  lastError String?
+  dedupeKey String?   @unique // מונע כפילות (אותה תזכורת פעמיים)
+  createdAt DateTime  @default(now())
+  doneAt    DateTime?
+
+  @@index([status, runAt])
+}

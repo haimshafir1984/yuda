@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, Card, Column, DataTable, ErrorBlock, FutureNotice, InlineAlert, PageHeader, Spinner } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import MessagingPanel from './MessagingPanel';
 
 interface DemoUser { id: number; name: string; role: string; roleLabel: string }
 interface RolesInfo { areas: Record<string, string>; roles: { role: string; label: string; permissions: Record<string, number> }[] }
@@ -45,7 +46,8 @@ export default function SettingsPage() {
           {users.isLoading ? <Spinner /> : users.error ? <ErrorBlock error={users.error} /> : <DataTable caption="משתמשי הדגמה" columns={userCols} rows={users.data!} rowKey={(u) => u.id} />}
         </Card>
         <InlineAlert tone="amber">הכניסה להדגמה היא בלי סיסמה. הרשאות נאכפות בשרת, אך אין עדיין סיסמאות, אימות או הצפנה. לפני נתונים אמיתיים יש להוסיף אותם.</InlineAlert>
-        <FutureNotice title="הגדרות נוספות" text="ניסוחי ברירת מחדל להודעות ושעות תזכורת יתווספו בשלב הבא." />
+        <MessagingPanel />
+        <FutureNotice title="הגדרות נוספות" text="שעות תזכורת, ספי התראה וחיבור ספק שליחה אמיתי יתווספו בשלב הבא." />
       </div>
     </>
   );

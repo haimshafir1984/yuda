@@ -70,6 +70,7 @@ const AREA_RULES: [RegExp, Area | 'staff'][] = [
   [/^\/service-requests(\/|$)/, 'requests'],
   [/^\/social-work(\/|$)/, 'socialWork'],
   [/^\/(service-meta|treatment-meta)$/, 'staff'],
+  [/^\/messages(\/|$)/, 'settings'],
 ];
 
 export const areaOfPath = (path: string): Area | 'staff' | null => AREA_RULES.find(([re]) => re.test(path))?.[1] ?? null;

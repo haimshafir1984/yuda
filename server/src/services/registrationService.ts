@@ -1,3 +1,4 @@
+import { afterCancellation, afterRegistration } from '../messaging/workshopMessages';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { AppError, notFound } from '../errors';
@@ -133,7 +134,7 @@ export async function precheckRegistration(memberId: number, workshopId: number)
 
 export async function registerMember(memberId: number, workshopId: number, answers: AnswerInput[], opts: RegisterOptions) {
   try {
-    return await prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
       const { workshop } = await assertCanRegister(tx, memberId, workshopId, answers, opts);
       const reg = await tx.registration.create({
         data: { memberId, workshopId, source: opts.source },
@@ -153,6 +154,8 @@ export async function registerMember(memberId: number, workshopId: number, answe
       }
       return reg;
     });
+    await afterRegistration(created.id); // אישור הרשמה ותזכורת מתוזמנת
+    return created;
   } catch (e) {
     // הגנה משכבת מסד הנתונים מפני מרוץ בין שתי הרשמות במקביל
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')
@@ -165,10 +168,12 @@ export async function cancelRegistration(registrationId: number, reason: string 
   const reg = await prisma.registration.findUnique({ where: { id: registrationId } });
   if (!reg) throw notFound('ההרשמה');
   if (reg.status === 'CANCELLED') throw new AppError(409, 'ALREADY_CANCELLED', 'ההרשמה כבר בוטלה');
-  return prisma.registration.update({
+  const updated = await prisma.registration.update({
     where: { id: registrationId },
     data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: reason ?? null },
   });
+  await afterCancellation(registrationId);
+  return updated;
 }
 
 export async function listWorkshopRegistrations(workshopId: number, includeCancelled: boolean) {

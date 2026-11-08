@@ -5,6 +5,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { ensureDefaultUsers } from '../src/auth/users';
+import { ensureDefaultTemplates } from '../src/messaging/templates';
 import * as T from '../src/services/treatmentService';
 import * as RQ from '../src/services/serviceRequestService';
 import * as SW from '../src/services/socialWorkService';
@@ -502,6 +503,7 @@ async function seedRequirementGaps(members: Map<string, number>) {
 }
 
 async function main() {
+  await ensureDefaultTemplates();
   await ensureDefaultUsers(); // משתמשי הדגמה לכניסה לפי תפקיד (העו"סיות הן אותן עובדות שבנתוני ההדגמה)
   const members = await seedMembers();
   const workshops = await seedWorkshops();
