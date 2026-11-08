@@ -10,6 +10,8 @@ type WorkshopWithSessions = Workshop & { sessions: WorkshopSession[]; _count?: {
 const sortSessions = <T extends WorkshopSession>(s: T[]) =>
   [...s].sort((a, b) => a.date.getTime() - b.date.getTime() || (a.startTime ?? '').localeCompare(b.startTime ?? '') || a.id - b.id);
 
+const REG_STATUSES: string[] = ['PUBLISHED', 'ONGOING'];
+
 export const workshopDto = (w: WorkshopWithSessions) => {
   const sessions = sortSessions(w.sessions);
   return {
@@ -26,7 +28,9 @@ export const workshopDto = (w: WorkshopWithSessions) => {
     price: w.price,
     nationalInsurance: w.nationalInsurance,
     status: w.status,
-    registrationOpen: w.registrationOpen,
+    // סטטוס משנה "רישום פתוח/סגור" קיים רק במפורסם ובמתקיים כעת (לפי האיפיון)
+    registrationApplies: REG_STATUSES.includes(w.status),
+    registrationOpen: REG_STATUSES.includes(w.status) && w.registrationOpen,
     registrationRequired: w.registrationMode === 'REQUIRED',
     registrationMode: w.registrationMode,
     autoCloseRegistration: w.autoCloseRegistration,
@@ -162,6 +166,10 @@ export async function updateWorkshop(id: number, input: z.infer<typeof workshopU
         ...(input.nationalInsurance !== undefined && { nationalInsurance: input.nationalInsurance }),
         ...(input.status !== undefined && { status: input.status }),
         ...(input.registrationOpen !== undefined && { registrationOpen: input.registrationOpen }),
+        // בטיוטה, בהסתיים ובבוטל אין סטטוס משנה: הרישום סגור
+        ...(input.status !== undefined && !REG_STATUSES.includes(input.status) && { registrationOpen: false }),
+        // מעבר לסטטוס שבו הרישום רלוונטי פותח אותו כברירת מחדל, אלא אם נבחר אחרת
+        ...(input.status !== undefined && REG_STATUSES.includes(input.status) && !REG_STATUSES.includes(existing.status) && input.registrationOpen === undefined && { registrationOpen: true }),
         ...(input.registrationMode !== undefined && { registrationMode: input.registrationMode, registrationRequired: input.registrationMode !== 'NOT_NEEDED' }),
         ...(input.autoCloseRegistration !== undefined && { autoCloseRegistration: input.autoCloseRegistration }),
         ...(input.priceType !== undefined && { priceType: input.priceType }),

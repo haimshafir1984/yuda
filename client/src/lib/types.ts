@@ -44,6 +44,7 @@ export interface Workshop {
   nationalInsurance: boolean;
   status: WorkshopStatus;
   registrationOpen: boolean;
+  registrationApplies: boolean;
   registrationRequired: boolean;
   registrationMode: 'REQUIRED' | 'NOT_NEEDED' | 'RECOMMENDED';
   autoCloseRegistration: boolean;

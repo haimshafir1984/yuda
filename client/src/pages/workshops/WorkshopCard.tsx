@@ -81,7 +81,7 @@ function GeneralTab({ w }: { w: Workshop }) {
           </Field>
         </div>
         <div className="flex flex-wrap gap-6">
-          <Checkbox label="הרשמה פתוחה" checked={v.registrationOpen} onChange={(c) => set('registrationOpen', c)} />
+          {(v.status === 'PUBLISHED' || v.status === 'ONGOING') && <Checkbox label="סטטוס משנה: רישום פתוח" checked={v.registrationOpen} onChange={(c) => set('registrationOpen', c)} />}
           <Checkbox label="משויך לביטוח לאומי" checked={v.nationalInsurance} onChange={(c) => set('nationalInsurance', c)} />
         </div>
         <Button type="submit" variant="primary" loading={mut.isPending}>שמירת שינויים</Button>
@@ -130,7 +130,7 @@ function RegistrationSettingsTab({ w }: { w: Workshop }) {
             )}
           </Field>
           <div className="flex flex-col justify-end gap-2 pb-2">
-            <Checkbox label="הרשמה פתוחה" checked={v.registrationOpen} onChange={(c) => set('registrationOpen', c)} />
+            {w.registrationApplies ? <Checkbox label="רישום פתוח (סטטוס משנה)" checked={v.registrationOpen} onChange={(c) => set('registrationOpen', c)} /> : <p className="text-xs text-slate-500">סטטוס משנה של רישום פתוח/סגור קיים רק בסדנה שפורסמה או מתקיימת כעת.</p>}
             {w.format === 'MULTI' && <Checkbox label="לסגור את הרישום אוטומטית עם תחילת הסדנה" checked={v.autoCloseRegistration} onChange={(c) => set('autoCloseRegistration', c)} />}
           </div>
         </div>
@@ -204,12 +204,13 @@ export default function WorkshopCard() {
     { value: 'questions', label: 'שאלות הרשמה' },
     { value: 'registrants', label: `נרשמים (${w.registrantCount})` },
     { value: 'sessions', label: 'מפגשים' },
-    { value: 'attendance', label: 'נוכחות' },
+    ...(w.status === 'ONGOING' || w.status === 'FINISHED' ? [{ value: 'attendance', label: 'נוכחות' }] : []), // רלוונטי רק אחרי תחילת הסדנה
     { value: 'waitlist', label: 'רשימת המתנה', future: true },
     { value: 'reminders', label: 'תזכורות', future: true },
     { value: 'finance', label: 'כספים', future: true },
-    { value: 'summary', label: 'סיכום ומסקנות' },
+    ...(w.status === 'FINISHED' ? [{ value: 'summary', label: 'סיכום ומסקנות' }] : []),
   ];
+  const activeTab = tabs.some((t) => t.value === tab) ? tab : 'general';
 
   return (
     <>
@@ -220,7 +221,7 @@ export default function WorkshopCard() {
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <Badge tone="teal">{kindLabel[w.kind]}</Badge>
             <Badge tone={statusTone(w.status)}>{statusLabel[w.status]}</Badge>
-            {w.registrationOpen ? <Badge tone="green">רישום פתוח</Badge> : <Badge>רישום סגור</Badge>}
+            {w.registrationApplies && (w.registrationOpen ? <Badge tone="green">רישום פתוח</Badge> : <Badge>רישום סגור</Badge>)}
             <span>{fmtDateRange(w.startDate, w.endDate)}</span>
             {w.facilitator && <span>מנחה: {w.facilitator}</span>}
             <span>{w.isPaid ? fmtMoney(w.price) : 'ללא תשלום'}</span>
@@ -244,7 +245,7 @@ export default function WorkshopCard() {
       />
       <ReadOnlyScope readOnly={foreign.foreign} reason={foreign.reason}>
         <ReadOnlyBanner />
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={activeTab} onValueChange={setTab}>
         <TabsList tabs={tabs} />
         <TabsContent value="general"><GeneralTab w={w} /></TabsContent>
         <TabsContent value="settings"><RegistrationSettingsTab w={w} /></TabsContent>

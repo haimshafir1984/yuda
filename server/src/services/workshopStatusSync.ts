@@ -29,7 +29,7 @@ export async function syncWorkshopStatuses(now: string = localNowString()) {
     const endsAtEffective = last.endTime ? endsAt : `${last.date.toISOString().slice(0, 10)}T23:59`;
 
     if (now > endsAtEffective) {
-      await prisma.workshop.update({ where: { id: w.id }, data: { status: 'FINISHED' } });
+      await prisma.workshop.update({ where: { id: w.id }, data: { status: 'FINISHED', registrationOpen: false } });
       finished += 1;
     } else if (w.status === 'PUBLISHED' && now >= startsAt) {
       await prisma.workshop.update({

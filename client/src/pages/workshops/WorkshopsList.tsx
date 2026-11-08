@@ -49,8 +49,12 @@ export default function WorkshopsList() {
     { key: 'start', header: 'תאריך התחלה', sortKey: 'startDate', cell: (w) => (w.startDate ? <div>{fmtDate(w.startDate)}<div className="text-xs text-slate-500">{fmtTimeRange(w.startTime, w.endTime)}</div></div> : 'טרם נקבע') },
     { key: 'end', header: 'תאריך סיום', cell: (w) => (w.endDate && w.endDate !== w.startDate ? fmtDate(w.endDate) : '—') },
     { key: 'fac', header: 'מנחה', cell: (w) => w.facilitator ?? '—' },
-    { key: 'status', header: 'סטטוס', sortKey: 'status', cell: (w) => <Badge tone={statusTone(w.status)}>{statusLabel[w.status]}</Badge> },
-    { key: 'reg', header: 'מצב הרשמה', cell: (w) => (w.registrationOpen ? <Badge tone="green">רישום פתוח</Badge> : <Badge>רישום סגור</Badge>) },
+    { key: 'status', header: 'סטטוס', sortKey: 'status', cell: (w) => (
+      <span className="flex flex-wrap items-center gap-1.5">
+        <Badge tone={statusTone(w.status)}>{statusLabel[w.status]}</Badge>
+        {w.registrationApplies && (w.registrationOpen ? <Badge tone="green">רישום פתוח</Badge> : <Badge>רישום סגור</Badge>)}
+      </span>
+    ) },
     { key: 'count', header: 'נרשמים', sortKey: 'registrantCount', cell: (w) => w.registrantCount },
     { key: 'price', header: 'מחיר', sortKey: 'price', cell: (w) => (w.isPaid ? fmtMoney(w.price) : 'ללא תשלום') },
     {

@@ -339,3 +339,26 @@ describe('ליווי עו"ס: סוג אוטומטי, פגישות שבוטלו, 
     expect(bad.body.error.code).toBe('MEETING_MISMATCH');
   });
 });
+
+describe('סטטוס משנה: רישום פתוח/סגור קיים רק במפורסם ובמתקיים כעת', () => {
+  it('טיוטה: אין סטטוס משנה. פרסום פותח, ביטול והסתיים סוגרים', async () => {
+    const w = await mkWorkshop();
+    let d = (await api().get(`/api/workshops/${w.id}`)).body;
+    expect(d.status).toBe('DRAFT');
+    expect(d.registrationApplies).toBe(false);
+    expect(d.registrationOpen).toBe(false);
+
+    await publish(w.id);
+    d = (await api().get(`/api/workshops/${w.id}`)).body;
+    expect(d.registrationApplies).toBe(true);
+    expect(d.registrationOpen).toBe(true);
+
+    await api().put(`/api/workshops/${w.id}`).send({ registrationOpen: false });
+    expect((await api().get(`/api/workshops/${w.id}`)).body.registrationOpen).toBe(false);
+
+    await api().put(`/api/workshops/${w.id}`).send({ status: 'CANCELLED' });
+    d = (await api().get(`/api/workshops/${w.id}`)).body;
+    expect(d.registrationApplies).toBe(false);
+    expect(d.registrationOpen).toBe(false);
+  });
+});
