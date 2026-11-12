@@ -10,6 +10,7 @@ export const ROLES = [
   'MEDIATOR',
   'WORKSHOP_MANAGER',
   'PROGRAM_COORDINATOR',
+  'INTAKE_COORDINATOR',
 ] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -21,9 +22,10 @@ export const ROLE_LABEL: Record<Role, string> = {
   MEDIATOR: 'מגשר',
   WORKSHOP_MANAGER: 'מנהל סדנאות',
   PROGRAM_COORDINATOR: 'רכז תכנית',
+  INTAKE_COORDINATOR: 'רכז קבלה',
 };
 
-export type Area = 'members' | 'workshops' | 'treatments' | 'requests' | 'socialWork' | 'settings';
+export type Area = 'members' | 'workshops' | 'treatments' | 'requests' | 'socialWork' | 'settings' | 'intake';
 export const AREA_LABEL: Record<Area, string> = {
   members: 'חברים',
   workshops: 'סדנאות ואירועים',
@@ -31,25 +33,27 @@ export const AREA_LABEL: Record<Area, string> = {
   requests: 'פניות ובקשות סיוע',
   socialWork: 'ליווי עו"ס',
   settings: 'הגדרות',
+  intake: 'קבלת חברים',
 };
 
 /** 0 אין גישה, 1 צפייה, 2 עריכה, 3 ניהול (כולל אישורים) */
 export type Level = 0 | 1 | 2 | 3;
 export const LEVEL = { NONE: 0, VIEW: 1, EDIT: 2, MANAGE: 3 } as const;
 
-const m = (members: Level, workshops: Level, treatments: Level, requests: Level, socialWork: Level, settings: Level): Record<Area, Level> => ({
-  members, workshops, treatments, requests, socialWork, settings,
+const m = (members: Level, workshops: Level, treatments: Level, requests: Level, socialWork: Level, settings: Level, intake: Level = 0): Record<Area, Level> => ({
+  members, workshops, treatments, requests, socialWork, settings, intake,
 });
 
 export const MATRIX: Record<Role, Record<Area, Level>> = {
   //                          חברים סדנאות שפ"ח פניות ליווי הגדרות
-  GENERAL_MANAGER: m(3, 3, 3, 3, 3, 3),
-  LEAD_SOCIAL_WORKER: m(2, 1, 3, 3, 3, 1),
+  GENERAL_MANAGER: m(3, 3, 3, 3, 3, 3, 3),
+  LEAD_SOCIAL_WORKER: m(2, 1, 3, 3, 3, 1, 1),
   SOCIAL_WORKER: m(2, 1, 2, 2, 2, 0),
   NURSE: m(1, 0, 0, 2, 0, 0),
   MEDIATOR: m(1, 0, 0, 2, 0, 0),
   WORKSHOP_MANAGER: m(2, 3, 0, 0, 0, 0),
   PROGRAM_COORDINATOR: m(1, 1, 0, 0, 0, 0),
+  INTAKE_COORDINATOR: m(1, 1, 0, 0, 0, 0, 3),
 };
 
 /** פניות שאחות ומגשר רואים ועורכים: רק מהקטגוריה שלהם */
@@ -62,6 +66,7 @@ export const permissionsOf = (role: Role) => MATRIX[role];
 const AREA_RULES: [RegExp, Area | 'staff'][] = [
   [/^\/members\/\d+\/(treatments|treatment-copay|treatment-exceptions)$/, 'treatments'],
   [/^\/members\/\d+\/social-work$/, 'socialWork'],
+  [/^\/intake(\/|$)/, 'intake'],
   [/^\/members\/\d+\/(notes|complaints)$/, 'socialWork'],
   [/^\/members\/\d+\/mediations$/, 'requests'],
   [/^\/(mediations)(\/|$)/, 'requests'],

@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, ClipboardList, Handshake, HeartHandshake, LifeBuoy, LogOut, Menu, Settings, ShieldAlert, Users } from 'lucide-react';
+import { CalendarDays, ClipboardList, Handshake, HeartHandshake, LifeBuoy, LogOut, Menu, Settings, ShieldAlert, UserPlus, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -15,6 +15,7 @@ const NAV: { to: string; label: string; icon: typeof Users; area: Area; hideForR
   { to: '/social-work', label: 'ליווי עו"ס', icon: LifeBuoy, area: 'socialWork' },
   { to: '/mediations', label: 'גישור משפחתי', icon: Handshake, area: 'requests', hideForRoles: ['NURSE'] },
   { to: '/complaints', label: 'דיווחים ותלונות', icon: ShieldAlert, area: 'socialWork' },
+  { to: '/intake', label: 'קבלת חברים', icon: UserPlus, area: 'intake' },
   { to: '/settings', label: 'הגדרות', icon: Settings, area: 'settings' },
 ];
 

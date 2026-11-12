@@ -34,9 +34,10 @@ model Member {
   socialProcesses SocialWorkProcess[]
   notes           MemberNote[]
   removals        MemberRemoval[]
-  complaintsAbout Complaint[]       @relation("ComplaintSubject")
-  complaintsBy    Complaint[]       @relation("ComplaintComplainant")
+  complaintsAbout Complaint[]              @relation("ComplaintSubject")
+  complaintsBy    Complaint[]              @relation("ComplaintComplainant")
   mediations      MediationCase[]
+  candidates      Candidate[]
 
   @@index([phoneNormalized])
 }
@@ -394,19 +395,19 @@ model ServiceRequestTreatment {
 }
 
 model SocialWorkProcess {
-  id           Int       @id @default(autoincrement())
-  memberId     Int
-  requestId    Int?
-  socialWorker String?
-  kinds        String // קודים מופרדים בפסיקים: RIGHTS,SUPPORT,PARENT_MEDIATION,FAMILY,EMOTIONAL,BUREAUCRATIC,OTHER
-  type         String // ONE_TIME | ONGOING
-  typeManual   Boolean   @default(false) // false = הסוג נקבע אוטומטית לפי מספר הפגישות
-  goal         String?
-  status       String    @default("NOT_STARTED") // NOT_STARTED | ACTIVE | FROZEN | FINISHED
-  startDate    DateTime
-  endDate      DateTime?
-  endReason    String?
-  endSummary   String?
+  id                Int       @id @default(autoincrement())
+  memberId          Int
+  requestId         Int?
+  socialWorker      String?
+  kinds             String // קודים מופרדים בפסיקים: RIGHTS,SUPPORT,PARENT_MEDIATION,FAMILY,EMOTIONAL,BUREAUCRATIC,OTHER
+  type              String // ONE_TIME | ONGOING
+  typeManual        Boolean   @default(false) // false = הסוג נקבע אוטומטית לפי מספר הפגישות
+  goal              String?
+  status            String    @default("NOT_STARTED") // NOT_STARTED | ACTIVE | FROZEN | FINISHED
+  startDate         DateTime
+  endDate           DateTime?
+  endReason         String?
+  endSummary        String?
   // כרטיס תכנית (חברי ביטוח לאומי): צרכים, מענים חיצוניים והמענים שיקבל
   programStartDate  DateTime?
   needs             String? // קודי צרכים מופרדים בפסיקים
@@ -414,8 +415,8 @@ model SocialWorkProcess {
   externalResponses String? // מענים חיצוניים שהוא מקבל (טקסט חופשי)
   responses         String? // קודי מענים מופרדים בפסיקים
   programNote       String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   member        Member                       @relation(fields: [memberId], references: [id])
   request       ServiceRequest?              @relation(fields: [requestId], references: [id])
@@ -584,6 +585,7 @@ model MessageTemplate {
 model OutboxMessage {
   id          Int       @id @default(autoincrement())
   memberId    Int?
+  candidateId Int? // הודעה למועמד (טרם חבר)
   channel     String // SMS | EMAIL
   toAddress   String? // טלפון או מייל בזמן השליחה
   templateKey String?
@@ -617,7 +619,6 @@ model ScheduledJob {
   @@index([status, runAt])
 }
 
-
 // ======================= שלב א׳: עדכוני אפיון (נובמבר 2026) =======================
 
 /// הרחקת חבר. הרחקה זמנית ועל תנאי כוללות תאריך סיום / תנאי, והחזרה נעשית ידנית בלבד.
@@ -643,22 +644,22 @@ model MemberRemoval {
 }
 
 model Complaint {
-  id                   Int      @id @default(autoincrement())
-  receivedAt           DateTime
-  complainantType      String // STAFF | MEMBER
-  complainantMemberId  Int?
-  complainantName      String? // איש צוות
-  subjectMemberId      Int
-  text                 String
-  status               String   @default("NEW") // NEW | IN_PROGRESS | HANDLED
-  actionTaken          String? // NONE | REMOVAL_PERMANENT | REMOVAL_CONDITIONAL | REMOVAL_TEMPORARY | OTHER
-  actionNote           String?
-  createdBy            String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                  Int      @id @default(autoincrement())
+  receivedAt          DateTime
+  complainantType     String // STAFF | MEMBER
+  complainantMemberId Int?
+  complainantName     String? // איש צוות
+  subjectMemberId     Int
+  text                String
+  status              String   @default("NEW") // NEW | IN_PROGRESS | HANDLED
+  actionTaken         String? // NONE | REMOVAL_PERMANENT | REMOVAL_CONDITIONAL | REMOVAL_TEMPORARY | OTHER
+  actionNote          String?
+  createdBy           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  subject     Member            @relation("ComplaintSubject", fields: [subjectMemberId], references: [id])
-  complainant Member?           @relation("ComplaintComplainant", fields: [complainantMemberId], references: [id])
+  subject     Member           @relation("ComplaintSubject", fields: [subjectMemberId], references: [id])
+  complainant Member?          @relation("ComplaintComplainant", fields: [complainantMemberId], references: [id])
   entries     ComplaintEntry[]
 
   @@index([subjectMemberId])
@@ -698,7 +699,7 @@ model MediationCase {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  member   Member                @relation(fields: [memberId], references: [id])
+  member   Member             @relation(fields: [memberId], references: [id])
   contacts MediationContact[]
 
   @@index([memberId])
@@ -718,4 +719,156 @@ model MediationContact {
   mediation MediationCase @relation(fields: [caseId], references: [id])
 
   @@index([caseId])
+}
+
+// ======================= קבלת חברים חדשים (מועמדות) =======================
+
+/// הגדרות מערכת כלליות (מפתח וערך), למשל גילאי קבלה, קוד כניסה וקישור לקבוצת הווטסאפ
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// כרטיס מועמדות: נוצר מטופס ההצטרפות באתר. כשמתקבל נוצר כרטיס חבר ורשום memberId
+model Candidate {
+  id               Int       @id @default(autoincrement())
+  firstName        String
+  lastName         String
+  nationalId       String?
+  birthDate        DateTime?
+  gender           String? // MALE | FEMALE
+  maritalStatus    String? // SINGLE | MARRIED | DIVORCED | WIDOWED | SEPARATED
+  childrenCount    Int?
+  phone            String
+  phoneNormalized  String
+  email            String?
+  preferredChannel String    @default("SMS")
+  community        String? // באיזו קהילה חרדית גדל/ה
+  elementarySchool String?
+  highSchool       String?
+  howHeard         String? // קוד
+  whyJoin          String?
+  anythingElse     String?
+  submittedAt      DateTime  @default(now())
+  // NEW | AWAITING_CLARIFICATION | INVITED_GROUP | AWAITING_PERSONAL | ACCEPTED | REJECTED | AIR | FADED | MAYBE_FUTURE
+  status           String    @default("NEW")
+  statusChangedAt  DateTime  @default(now())
+  // איפה נתקע / איך נסגר: משמש לסימון בקשה חוזרת (REJECT_AGE, REJECT_BACKGROUND, ...)
+  outcomeCode      String?
+  rejectionReason  String? // AGE_YOUNG | AGE_OLD | NOT_HAREDI | OTHER
+  rejectionNote    String?
+  coordinator      String?
+  callDate         DateTime?
+  callSummary      String?
+  previousId       Int? // כרטיס המועמדות הקודם של אותו אדם
+  repeatReason     String? // קוד "מה קרה בפעם הקודמת"
+  existingMemberId Int? // כשהפונה כבר חבר קיים במערכת
+  memberId         Int? // החבר שנוצר בעת הקבלה
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  member         Member?               @relation(fields: [memberId], references: [id])
+  events         CandidateEvent[]
+  invitations    CandidateInvitation[]
+  signups        InterviewSignup[]
+  questionnaires Questionnaire[]
+  meetings       PersonalMeeting[]
+
+  @@index([status])
+  @@index([phoneNormalized])
+  @@index([nationalId])
+}
+
+model CandidateEvent {
+  id          Int      @id @default(autoincrement())
+  candidateId Int
+  type        String
+  description String
+  fromStatus  String?
+  toStatus    String?
+  performedBy String?
+  createdAt   DateTime @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
+}
+
+/// הזמנה שנשלחה למועמד (לראיון קבוצתי או לפגישה אישית), עם קישור אישי להשתבצות
+model CandidateInvitation {
+  id          Int       @id @default(autoincrement())
+  candidateId Int
+  kind        String // GROUP | PERSONAL
+  token       String    @unique
+  offered     String // GROUP: מזהי ראיונות מופרדים בפסיקים. PERSONAL: מועדים (תאריך ושעה) מופרדים בפסיקים
+  sentAt      DateTime  @default(now())
+  respondedAt DateTime?
+  response    String? // SIGNED | NOTE
+  note        String?
+  chosen      String? // מזהה הראיון או המועד שנבחר
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
+}
+
+/// ראיון קבוצתי. השם הוא החודש והשנה
+model InterviewSession {
+  id          Int      @id @default(autoincrement())
+  date        DateTime
+  startTime   String?
+  coordinator String?
+  createdAt   DateTime @default(now())
+
+  signups InterviewSignup[]
+
+  @@index([date])
+}
+
+model InterviewSignup {
+  id          Int       @id @default(autoincrement())
+  candidateId Int
+  sessionId   Int
+  attended    Boolean? // null = טרם סומן
+  decision    String? // NO_SHOW | REJECT | ACCEPT | PERSONAL
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  candidate Candidate        @relation(fields: [candidateId], references: [id])
+  session   InterviewSession @relation(fields: [sessionId], references: [id])
+
+  @@unique([candidateId, sessionId])
+  @@index([sessionId])
+}
+
+/// שאלון היכרות: נשלח בקישור אישי למי שהגיע לראיון, התשובות נשמרות כ-JSON
+model Questionnaire {
+  id          Int       @id @default(autoincrement())
+  candidateId Int
+  signupId    Int?
+  token       String    @unique
+  sentAt      DateTime  @default(now())
+  filledAt    DateTime?
+  answers     String?
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
+}
+
+model PersonalMeeting {
+  id           Int       @id @default(autoincrement())
+  candidateId  Int
+  scheduledAt  DateTime?
+  heldAt       DateTime?
+  noShow       Boolean   @default(false)
+  decision     String? // ACCEPT | REJECT | NOT_NOW
+  decisionNote String?
+  decidedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  candidate Candidate @relation(fields: [candidateId], references: [id])
+
+  @@index([candidateId])
 }

@@ -10,6 +10,7 @@ import { membersRouter } from './routes/members';
 import { publicRouter } from './routes/public';
 import { socialRouter } from './routes/social';
 import { stageARouter } from './routes/stageA';
+import { intakeRouter } from './routes/intake';
 import { messagesRouter } from './routes/messages';
 import { treatmentsRouter } from './routes/treatments';
 import { workshopsRouter } from './routes/workshops';
@@ -26,6 +27,7 @@ export function createApp() {
   app.use('/api/me', meRouter);
   app.use('/api/public', publicRouter);
   app.use('/api', requireAccess);
+  app.use('/api', intakeRouter);
   app.use('/api', stageARouter); // לפני membersRouter: /members/reports/inactive לא נתפס כ-/members/:id
   app.use('/api/members', membersRouter);
   app.use('/api', workshopsRouter);

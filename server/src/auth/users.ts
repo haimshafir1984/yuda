@@ -11,6 +11,7 @@ export const DEFAULT_USERS: { name: string; role: Role }[] = [
   { name: 'אילן שדה', role: 'MEDIATOR' },
   { name: 'מיכל אורן', role: 'WORKSHOP_MANAGER' },
   { name: 'אייל נחום', role: 'PROGRAM_COORDINATOR' },
+  { name: 'שיפי לוי', role: 'INTAKE_COORDINATOR' },
 ];
 
 /** מוסיף משתמשי הדגמה חסרים (לפי שם). בטוח להרצה חוזרת ואינו משנה משתמשים קיימים */
@@ -26,9 +27,9 @@ export async function ensureDefaultUsers(): Promise<number> {
   return created;
 }
 
-/** בעלייה: אם אין אף משתמש (מסד חדש) יוצרים את משתמשי ההדגמה, כדי שתמיד אפשר להיכנס */
+/** בעלייה: יוצרים משתמשי הדגמה חסרים, כדי שתמיד אפשר להיכנס */
 export async function ensureUsersOnStartup() {
-  if ((await prisma.appUser.count()) === 0) await ensureDefaultUsers();
+  await ensureDefaultUsers(); // מוסיף גם תפקידים חדשים שנוספו אחרי ההקמה (לפי שם, בלי לשנות קיימים)
 }
 
 export const userDto = (u: { id: number; name: string; role: string; active: boolean }) => ({

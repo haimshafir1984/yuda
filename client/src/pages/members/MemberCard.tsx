@@ -12,6 +12,7 @@ import { channelLabel, fmtDate, fmtTenure, genderLabel, isRemoved, maritalLabel,
 import type { Member } from '../../lib/types';
 import MemberForm, { fromMember } from './MemberForm';
 import { ComplaintsTab, StaffNotes, StatusTab } from './MemberStatusTabs';
+import IntakeInfoTab from './IntakeInfoTab';
 import { ActivityTab, ExceptionsTab, LedgerTab, PreferencesTab, RestrictionsTab, SocialServicesTab } from './MemberTabs';
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
@@ -77,7 +78,7 @@ export default function MemberCard() {
 
   const tabs = [
     { value: 'personal', label: 'פרטים אישיים' },
-    { value: 'intake', label: 'פרטי קבלה', future: true },
+    { value: 'intake', label: 'פרטי קבלה' },
     { value: 'activity', label: 'פעילות קבוצתית' },
     ...(m.nationalInsurance ? [{ value: 'ni', label: 'ביטוח לאומי', future: true }] : []),
     { value: 'social', label: 'שירותים סוציאליים' },
@@ -133,7 +134,7 @@ export default function MemberCard() {
           <PersonalTab member={m} editing={editing} setEditing={setEditing} />
         </TabsContent>
         <TabsContent value="intake">
-          <FutureNotice title="פרטי קבלה" text="מודול זה יפותח בשלב הבא" />
+          <IntakeInfoTab memberId={m.id} />
         </TabsContent>
         <TabsContent value="activity">
           <ActivityTab memberId={m.id} />

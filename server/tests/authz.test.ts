@@ -51,7 +51,7 @@ describe('כניסה בלי סיסמה', () => {
     expect(res.body.error.code).toBe('UNAUTHENTICATED');
     const users = await request(app).get('/api/auth/demo-users');
     expect(users.status).toBe(200);
-    expect(users.body).toHaveLength(8);
+    expect(users.body).toHaveLength(9);
     expect(users.body.find((u: { name: string }) => u.name === NAMES.ronit).roleLabel).toBe('עו"סית');
     expect((await request(app).get('/api/health')).status).toBe(200);
   });
@@ -76,7 +76,7 @@ describe('כניסה בלי סיסמה', () => {
 
   it('ensureDefaultUsers בטוח להרצה חוזרת', async () => {
     expect(await ensureDefaultUsers()).toBe(0);
-    expect(await prisma.appUser.count()).toBe(8);
+    expect(await prisma.appUser.count()).toBe(9);
   });
 });
 

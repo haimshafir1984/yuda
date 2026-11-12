@@ -3,7 +3,7 @@ import { ReactNode, createContext, useContext, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from './api';
 
-export type Area = 'members' | 'workshops' | 'treatments' | 'requests' | 'socialWork' | 'settings';
+export type Area = 'members' | 'workshops' | 'treatments' | 'requests' | 'socialWork' | 'settings' | 'intake';
 /** 0 אין גישה, 1 צפייה, 2 עריכה, 3 ניהול */
 export type Level = 0 | 1 | 2 | 3;
 export const LEVEL = { VIEW: 1, EDIT: 2, MANAGE: 3 } as const;
@@ -53,6 +53,7 @@ export const AREA_PREFIX: [string, Area][] = [
   ['/requests', 'requests'],
   ['/social-work', 'socialWork'],
   ['/complaints', 'socialWork'],
+  ['/intake', 'intake'],
   ['/mediations', 'requests'],
   ['/settings', 'settings'],
 ];

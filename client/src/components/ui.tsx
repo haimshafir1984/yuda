@@ -103,7 +103,7 @@ export function Checkbox({ label, checked, onChange, disabled }: { label: string
 }
 
 // ---------- תצוגה ----------
-type Tone = 'gray' | 'green' | 'blue' | 'amber' | 'red' | 'teal';
+export type Tone = 'gray' | 'green' | 'blue' | 'amber' | 'red' | 'teal';
 const tones: Record<Tone, string> = {
   gray: 'bg-slate-100 text-slate-700',
   green: 'bg-emerald-50 text-emerald-800',

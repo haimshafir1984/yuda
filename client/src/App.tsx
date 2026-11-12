@@ -7,6 +7,10 @@ import { api } from './lib/api';
 import { Area, useAuth } from './lib/auth';
 import { ComplaintCard, ComplaintsList } from './pages/complaints/ComplaintsPages';
 import { MediationCard, MediationList } from './pages/mediation/MediationPages';
+import CandidateCard from './pages/intake/CandidateCard';
+import IntakePage from './pages/intake/IntakePage';
+import { InvitationPage, JoinPage, QuestionnairePage } from './pages/intake/PublicIntake';
+import SessionPage from './pages/intake/SessionPage';
 import LoginPage from './pages/LoginPage';
 import MemberCard from './pages/members/MemberCard';
 import MemberCreate from './pages/members/MemberCreate';
@@ -66,7 +70,7 @@ const Guard = ({ area, children }: { area: Area; children: ReactNode }) => {
 function Home() {
   const { can } = useAuth();
   const first = (
-    [['members', '/members'], ['workshops', '/workshops'], ['requests', '/requests'], ['treatments', '/treatments'], ['socialWork', '/social-work']] as [Area, string][]
+    [['members', '/members'], ['workshops', '/workshops'], ['requests', '/requests'], ['treatments', '/treatments'], ['socialWork', '/social-work'], ['intake', '/intake']] as [Area, string][]
   ).find(([area]) => can(area));
   return first ? <Navigate to={first[1]} replace /> : <NoAccess />;
 }
@@ -79,6 +83,10 @@ export default function App() {
       {/* דפים ציבוריים, בלי כניסת צוות: הרישום המדומה ודף האירועים של החבר */}
       <Route path="/register/:id" element={<PublicRegister />} />
       <Route path="/my-events" element={<MyEvents />} />
+      <Route path="/join" element={<JoinPage />} />
+      <Route path="/invite/:token" element={<InvitationPage />} />
+      <Route path="/meeting/:token" element={<InvitationPage />} />
+      <Route path="/questionnaire/:token" element={<QuestionnairePage />} />
       <Route element={<AuthGate />}>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
@@ -101,6 +109,9 @@ export default function App() {
           <Route path="/complaints/:id" element={g('socialWork', <ComplaintCard />)} />
           <Route path="/mediations" element={g('requests', <MediationList />)} />
           <Route path="/mediations/:id" element={g('requests', <MediationCard />)} />
+          <Route path="/intake" element={g('intake', <IntakePage />)} />
+          <Route path="/intake/candidates/:id" element={g('intake', <CandidateCard />)} />
+          <Route path="/intake/sessions/:id" element={g('intake', <SessionPage />)} />
           <Route path="/settings" element={g('settings', <SettingsPage />)} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

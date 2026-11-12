@@ -61,10 +61,15 @@ export async function listJobs(status?: string) {
 }
 
 /** מחזור רקע אחד: סטטוסי סדנאות, משימות מתוזמנות וניסיון חוזר להודעות */
+/** פעולות תקופתיות נוספות (למשל סריקת מועמדים) נרשמות כאן, כדי לא ליצור תלות מעגלית */
+const tickHooks: ((now: Date) => Promise<unknown>)[] = [];
+export const registerTickHook = (fn: (now: Date) => Promise<unknown>) => void tickHooks.push(fn);
+
 export async function backgroundTick(now: Date = new Date()) {
   await syncWorkshopStatuses(localNowString(now));
   const jobs = await runDueJobs(now);
   const retried = await retryFailedMessages();
+  for (const h of tickHooks) await h(now).catch(() => undefined);
   return { ...jobs, retried };
 }
 
