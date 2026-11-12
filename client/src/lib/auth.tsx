@@ -52,6 +52,8 @@ export const AREA_PREFIX: [string, Area][] = [
   ['/treatments', 'treatments'],
   ['/requests', 'requests'],
   ['/social-work', 'socialWork'],
+  ['/complaints', 'socialWork'],
+  ['/mediations', 'requests'],
   ['/settings', 'settings'],
 ];
 export const areaOfPathname = (pathname: string): Area | null => AREA_PREFIX.find(([p]) => pathname === p || pathname.startsWith(`${p}/`))?.[1] ?? null;

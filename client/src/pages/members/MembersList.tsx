@@ -5,9 +5,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Badge, Button, Card, Column, DataTable, EmptyState, ErrorBlock, Input, Ltr, PageHeader, Pagination, Select, Spinner } from '../../components/ui';
 import { api } from '../../lib/api';
-import { fmtDate, genderLabel } from '../../lib/format';
+import { fmtDate, genderLabel, memberStatusLabel, memberStatusTone } from '../../lib/format';
 import { useDebounced } from '../../lib/hooks';
-import type { MemberRow, Paged } from '../../lib/types';
+import type { Member, MemberRow, Paged } from '../../lib/types';
 
 const PAGE_SIZE = 15;
 
@@ -17,12 +17,15 @@ export default function MembersList() {
   const [q, setQ] = useState('');
   const [gender, setGender] = useState('');
   const [ni, setNi] = useState('');
+  const [status, setStatus] = useState('');
+  const [report, setReport] = useState(false);
+  const inactive = useQuery({ queryKey: ['members-inactive-report'], queryFn: () => api.get<Member[]>('/members/reports/inactive'), enabled: report });
   const [sort, setSort] = useState('name');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const dq = useDebounced(q);
 
-  const params = { q: dq, gender, nationalInsurance: ni, sort, order, page, pageSize: PAGE_SIZE };
+  const params = { q: dq, gender, nationalInsurance: ni, status, sort, order, page, pageSize: PAGE_SIZE };
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['members', params],
     queryFn: () => api.get<Paged<MemberRow>>('/members', params),
@@ -45,6 +48,7 @@ export default function MembersList() {
     { key: 'age', header: 'גיל', sortKey: 'age', cell: (m) => m.age ?? '—' },
     { key: 'gender', header: 'מגדר', sortKey: 'gender', cell: (m) => (m.gender ? genderLabel[m.gender] : '—') },
     { key: 'joinDate', header: 'תאריך הצטרפות', sortKey: 'joinDate', cell: (m) => fmtDate(m.joinDate) },
+    { key: 'status', header: 'סטטוס', cell: (m) => <Badge tone={memberStatusTone(m.status)}>{memberStatusLabel[m.status] ?? m.status}</Badge> },
     { key: 'ni', header: 'ביטוח לאומי', sortKey: 'nationalInsurance', cell: (m) => (m.nationalInsurance ? <Badge tone="teal">כן</Badge> : <Badge>לא</Badge>) },
     { key: 'count', header: 'סדנאות שנרשם אליהן', sortKey: 'workshopCount', cell: (m) => m.workshopCount },
     {
@@ -69,6 +73,22 @@ export default function MembersList() {
           </Button>
         }
       />
+      {report && (
+        <Card className="mb-4">
+          <div className="border-b border-slate-200 p-3">
+            <h2 className="font-semibold text-slate-900">חברים פעילים שלא השתתפו בפעילות מתועדת במשך שנה</h2>
+            <p className="mt-1 text-xs text-slate-500">הדוח מתריע בלבד. מומלץ לבדוק אם החבר משתתף בפעילויות שאינן מתועדות, ואם לא, להעביר אותו ל&quot;לא פעיל&quot; מכרטיס החבר (טאב סטטוס והרחקות).</p>
+          </div>
+          {inactive.isLoading ? <Spinner /> : inactive.error ? <ErrorBlock error={inactive.error} onRetry={() => inactive.refetch()} /> : (
+            <DataTable caption="חברים לא פעילים שנה" columns={[
+              { key: 'n', header: 'שם', cell: (m: Member) => <span className="font-medium">{m.fullName}</span> },
+              { key: 'p', header: 'טלפון', cell: (m: Member) => <Ltr>{m.phone}</Ltr> },
+              { key: 'j', header: 'הצטרף', cell: (m: Member) => fmtDate(m.joinDate) },
+              { key: 'o', header: 'פעולה', cell: (m: Member) => <Button size="sm" onClick={() => nav(`/members/${m.id}`)}>פתח כרטיס</Button> },
+            ]} rows={inactive.data ?? []} rowKey={(m: Member) => m.id} empty={<EmptyState title="אין חברים כאלה" />} />
+          )}
+        </Card>
+      )}
       <Card>
         <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 p-3">
           <div className="relative min-w-64 flex-1">
@@ -87,6 +107,13 @@ export default function MembersList() {
             <option value="MALE">גבר</option>
             <option value="FEMALE">אישה</option>
           </Select>
+          <Select aria-label="סינון לפי סטטוס" className="w-44" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
+            <option value="">סטטוס: הכל</option>
+            <option value="ACTIVE">פעילים</option>
+            <option value="INACTIVE">לא פעילים</option>
+            <option value="REMOVED">מורחקים</option>
+          </Select>
+          <Button onClick={() => setReport((r) => !r)}>{report ? 'הסתר דוח חברים לא פעילים' : 'דוח: חברים לא פעילים שנה'}</Button>
           <Select aria-label="סינון לפי ביטוח לאומי" className="w-48" value={ni} onChange={(e) => { setNi(e.target.value); setPage(1); }}>
             <option value="">ביטוח לאומי: הכל</option>
             <option value="true">שייכים לתכנית</option>

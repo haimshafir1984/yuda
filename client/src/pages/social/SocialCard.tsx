@@ -11,7 +11,7 @@ import {
 } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
 import {
-  DURATION_BANDS, durationBand, durationLabel, meetingActionLabel, topicLabel, endReasonLabel, fmtDate, fmtDateTime, interventionStatusLabel, interventionTypeLabel, kindLabel2, modeLabel, processTypeLabel, requestStatusLabel, requestStatusTone, requestTypeLabel,
+  DURATION_BANDS, claimTypeLabel, needLabel, responseLabel, durationBand, durationLabel, meetingActionLabel, topicLabel, endReasonLabel, fmtDate, fmtDateTime, interventionStatusLabel, interventionTypeLabel, kindLabel2, modeLabel, processTypeLabel, requestStatusLabel, requestStatusTone, requestTypeLabel,
   socialEventLabel, socialStatusLabel, socialStatusTone, swReportTypeLabel, todayStr, trackLabel, treatmentStatusLabel, treatmentStatusTone,
 } from '../../lib/format';
 import type { ProcessRelated, SocialEvent, SocialIntervention, SocialMeeting, SocialProcess, SwReport, Treatment } from '../../lib/types';
@@ -86,7 +86,7 @@ function GeneralTab({ p, editing, setEditing }: { p: SocialProcess; editing: boo
 // ----- טאב 2: פגישות -----
 interface MForm {
   id?: number; date: string; time: string; subject: string; mode: string; duration: number; originalMinutes: number | null; summary: string; followUpNotes: string; followUpRequired: boolean;
-  status: 'HELD' | 'CANCELLED'; cancelReason: string; topics: string[]; meetingActions: string[]; externalPartner: string;
+  status: 'HELD' | 'CANCELLED'; cancelReason: string; topics: string[]; meetingActions: string[]; externalPartner: string; claimType: string;
 }
 
 function CheckGroup({ legend, options, value, onChange }: { legend: string; options: Record<string, string>; value: string[]; onChange: (v: string[]) => void }) {
@@ -128,11 +128,11 @@ function MeetingsTab({ p }: { p: SocialProcess }) {
     setErrors({});
     setForm({
       id: m.id, date: m.date, time: m.time, subject: m.subject, mode: m.mode, duration: durationBand(m.durationMinutes), originalMinutes: m.durationMinutes, summary: m.summary ?? '',
-      followUpNotes: m.followUpNotes ?? '', followUpRequired: m.followUpRequired, status: m.status, cancelReason: m.cancelReason ?? '', topics: m.topics, meetingActions: m.meetingActions, externalPartner: m.externalPartner ?? '',
+      followUpNotes: m.followUpNotes ?? '', followUpRequired: m.followUpRequired, status: m.status, cancelReason: m.cancelReason ?? '', topics: m.topics, meetingActions: m.meetingActions, externalPartner: m.externalPartner ?? '', claimType: m.claimType ?? '',
     });
   };
   const blank = (status: 'HELD' | 'CANCELLED'): MForm => ({
-    date: todayStr(), time: '10:00', subject: '', mode: 'FACE', duration: 60, originalMinutes: null, summary: '', followUpNotes: '', followUpRequired: false, status, cancelReason: '', topics: [], meetingActions: [], externalPartner: '',
+    date: todayStr(), time: '10:00', subject: '', mode: 'FACE', duration: 60, originalMinutes: null, summary: '', followUpNotes: '', followUpRequired: false, status, cancelReason: '', topics: [], meetingActions: [], externalPartner: '', claimType: '',
   });
 
   const columns: Column<SocialMeeting>[] = [
@@ -140,9 +140,9 @@ function MeetingsTab({ p }: { p: SocialProcess }) {
     { key: 'd', header: 'תאריך', cell: (m) => `${fmtDate(m.date)} ${m.time}` },
     { key: 's', header: 'נושא', cell: (m) => <span className="font-medium">{m.subject}</span> },
     { key: 'tp', header: 'נושאים שעלו', cell: (m) => (m.topics.length ? m.topics.map((t) => topicLabel[t]).join(', ') : '—') },
-    { key: 'ac', header: 'התערבויות בפגישה', cell: (m) => (m.meetingActions.length ? m.meetingActions.map((a) => (a === 'EXTERNAL_PARTNER' && m.externalPartner ? `${meetingActionLabel[a]}: ${m.externalPartner}` : meetingActionLabel[a])).join(', ') : '—') },
-    { key: 'm', header: 'אופן מפגש', cell: (m) => modeLabel[m.mode] },
-    { key: 'du', header: 'משך', cell: (m) => durationLabel(m.durationMinutes) },
+    { key: 'ac', header: 'התערבויות בפגישה', cell: (m) => (m.meetingActions.length ? m.meetingActions.map((a) => (a === 'EXTERNAL_PARTNER' && m.externalPartner ? `${meetingActionLabel[a]}: ${m.externalPartner}` : a === 'CLAIM' && m.claimType ? `${meetingActionLabel[a]}: ${claimTypeLabel[m.claimType]}` : meetingActionLabel[a])).join(', ') : '—') },
+    { key: 'm', header: 'אופן מגע', cell: (m) => modeLabel[m.mode] },
+    { key: 'du', header: 'משך', cell: (m) => (m.mode === 'MESSAGE' ? '—' : durationLabel(m.durationMinutes)) },
     { key: 'su', header: 'סיכום קצר', cell: (m) => <span className="line-clamp-2 max-w-xs">{m.summary ?? '—'}</span> },
     { key: 'f', header: 'המשך', cell: (m) => (m.followUpRequired ? <Badge tone="amber">נדרשת פעולה</Badge> : '—') },
     { key: 'a', header: 'פעולה', cell: (m) => <Button size="sm" onClick={() => edit(m)}>פתח רשומה</Button> },
@@ -161,6 +161,7 @@ function MeetingsTab({ p }: { p: SocialProcess }) {
     if (!form.time) e.time = 'יש לבחור שעה';
     if (form.status === 'CANCELLED' && !form.cancelReason.trim()) e.cancelReason = 'בפגישה שבוטלה יש להזין סיבה';
     if (form.meetingActions.includes('EXTERNAL_PARTNER') && !form.externalPartner.trim()) e.externalPartner = 'יש להזין את שם גורם השת"פ';
+    if (form.meetingActions.includes('CLAIM') && !form.claimType) e.claimType = 'יש לבחור את סוג התביעה';
     setErrors(e);
     if (!Object.keys(e).length) save.mutate(undefined);
   };
@@ -196,12 +197,13 @@ function MeetingsTab({ p }: { p: SocialProcess }) {
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="נושא הפגישה" hint="אם ריק: לפי מהות התהליך" error={errors.subject}><Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} /></Field>
               <Field label="פורמט הפגישה"><Select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })}>{Object.entries(modeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
-              <Field label="משך הפגישה"><Select value={form.duration} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })}>{DURATION_BANDS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}</Select></Field>
+              {form.mode !== 'MESSAGE' ? <Field label="משך הפגישה"><Select value={form.duration} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })}>{DURATION_BANDS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}</Select></Field> : <p className="self-end pb-2 text-xs text-slate-500">בהודעה אין פורמט ומשך.</p>}
             </div>
             {form.status === 'HELD' && (
               <>
                 <CheckGroup legend="נושאים שעלו בפגישה" options={topicLabel} value={form.topics} onChange={(topics) => setForm({ ...form, topics })} />
                 <CheckGroup legend="התערבויות בפגישה" options={meetingActionLabel} value={form.meetingActions} onChange={(meetingActions) => setForm({ ...form, meetingActions })} />
+                {form.meetingActions.includes('CLAIM') && <Field label="סוג התביעה" required error={errors.claimType}><Select value={form.claimType} onChange={(e) => { setForm({ ...form, claimType: e.target.value }); setErrors((x) => ({ ...x, claimType: '' })); }}><option value="">בחירה</option>{Object.entries(claimTypeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>}
                 {form.meetingActions.includes('EXTERNAL_PARTNER') && <Field label="שם גורם השת״פ החיצוני" required error={errors.externalPartner}><Input value={form.externalPartner} onChange={(e) => { setForm({ ...form, externalPartner: e.target.value }); setErrors((x) => ({ ...x, externalPartner: '' })); }} /></Field>}
                 <Field label="סיכום הפגישה (לא חובה)"><Textarea className="min-h-20" value={form.summary} onChange={(e) => setForm({ ...form, summary: e.target.value })} /></Field>
                 <Field label="הערות להמשך"><Textarea className="min-h-16" value={form.followUpNotes} onChange={(e) => setForm({ ...form, followUpNotes: e.target.value })} /></Field>
@@ -410,6 +412,39 @@ function HistoryTab({ id }: { id: number }) {
   return <Card><DataTable caption="היסטוריית התהליך" columns={columns} rows={q.data!} rowKey={(e) => e.id} empty={<EmptyState title="אין אירועים" />} /></Card>;
 }
 
+// ----- כרטיס תכנית (חברי ביטוח לאומי בלבד): צרכים, מענים חיצוניים והמענים שיקבל -----
+function ProgramTab({ p }: { p: SocialProcess }) {
+  const { readOnly } = useEditState();
+  const [editing, setEditing] = useState(false);
+  const [f, setF] = useState({ programStartDate: p.programStartDate ?? '', needs: p.needs, needsNote: p.needsNote ?? '', externalResponses: p.externalResponses ?? '', responses: p.responses, programNote: p.programNote ?? '' });
+  const save = useAction(() => api.put(`/social-work/processes/${p.id}`, f), { success: 'כרטיס התכנית נשמר', onSuccess: () => setEditing(false) });
+  const list = (codes: string[], labels: Record<string, string>) => (codes.length ? codes.map((c) => labels[c] ?? c).join(', ') : '—');
+  if (!editing)
+    return (
+      <Card className="space-y-4 p-5">
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <div><dt className="text-xs font-medium text-slate-500">תאריך התנעת התכנית</dt><dd className="mt-0.5 text-sm">{fmtDate(p.programStartDate)}</dd></div>
+          <div><dt className="text-xs font-medium text-slate-500">צרכים</dt><dd className="mt-0.5 text-sm">{list(p.needs, needLabel)}{p.needsNote ? ` · ${p.needsNote}` : ''}</dd></div>
+          <div><dt className="text-xs font-medium text-slate-500">מענים חיצוניים שהוא מקבל</dt><dd className="mt-0.5 whitespace-pre-line text-sm">{p.externalResponses ?? '—'}</dd></div>
+          <div><dt className="text-xs font-medium text-slate-500">המענים שיקבל בחצר</dt><dd className="mt-0.5 text-sm">{list(p.responses, responseLabel)}</dd></div>
+          <div className="sm:col-span-2"><dt className="text-xs font-medium text-slate-500">הערה חופשית</dt><dd className="mt-0.5 whitespace-pre-line text-sm">{p.programNote ?? '—'}</dd></div>
+        </dl>
+        <Button disabled={readOnly} onClick={() => setEditing(true)}><Pencil className="size-4" aria-hidden /> עריכת כרטיס התכנית</Button>
+      </Card>
+    );
+  return (
+    <Card className="space-y-4 p-5">
+      <Field label="תאריך התנעת התכנית"><Input type="date" className="max-w-56" value={f.programStartDate} onChange={(e) => setF({ ...f, programStartDate: e.target.value })} /></Field>
+      <CheckGroup legend="צרכים (בחירה מרובה)" options={needLabel} value={f.needs} onChange={(needs) => setF({ ...f, needs })} />
+      <Field label="הערה לצרכים (שדה חופשי)"><Input value={f.needsNote} onChange={(e) => setF({ ...f, needsNote: e.target.value })} /></Field>
+      <Field label="מענים חיצוניים שהוא מקבל" hint="למשל: מלגת שיקום, מלווה על ידי יתד"><Textarea className="min-h-16" value={f.externalResponses} onChange={(e) => setF({ ...f, externalResponses: e.target.value })} /></Field>
+      <CheckGroup legend="המענים שיקבל בחצר (בחירה מרובה)" options={responseLabel} value={f.responses} onChange={(responses) => setF({ ...f, responses })} />
+      <Field label="הערה חופשית"><Textarea className="min-h-16" value={f.programNote} onChange={(e) => setF({ ...f, programNote: e.target.value })} /></Field>
+      <div className="flex gap-2"><Button variant="primary" loading={save.isPending} onClick={() => save.mutate(undefined)}>שמירה</Button><Button onClick={() => setEditing(false)} disabled={save.isPending}>ביטול</Button></div>
+    </Card>
+  );
+}
+
 // ----- כרטיס -----
 export default function SocialCard() {
   const id = Number(useParams().id);
@@ -440,6 +475,7 @@ export default function SocialCard() {
   if (error || !p) return <ErrorBlock error={error ?? new Error('התהליך לא נמצא')} onRetry={() => refetch()} />;
   const tabs = [
     { value: 'general', label: 'פרטים כלליים' }, { value: 'meetings', label: `פגישות (${p.meetingCount})` }, { value: 'interventions', label: 'התערבויות ופעולות' },
+    ...(p.nationalInsurance ? [{ value: 'program', label: 'כרטיס תכנית' }] : []),
     { value: 'reports', label: 'דוחות וסיכומים' }, { value: 'related', label: 'תהליכים קשורים' }, { value: 'history', label: 'היסטוריה' },
   ];
   return (
@@ -475,6 +511,7 @@ export default function SocialCard() {
         <TabsContent value="general"><GeneralTab key={editing ? 'e' : 'v'} p={p} editing={editing} setEditing={setEditing} /></TabsContent>
         <TabsContent value="meetings"><MeetingsTab p={p} /></TabsContent>
         <TabsContent value="interventions"><InterventionsTab p={p} /></TabsContent>
+        <TabsContent value="program"><ProgramTab p={p} /></TabsContent>
         <TabsContent value="reports"><ReportsTab p={p} /></TabsContent>
         <TabsContent value="related"><RelatedTab p={p} /></TabsContent>
         <TabsContent value="history"><HistoryTab id={p.id} /></TabsContent>

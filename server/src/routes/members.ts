@@ -14,6 +14,7 @@ membersRouter.get(
         q: q.q as string | undefined,
         gender: q.gender as string | undefined,
         nationalInsurance: q.nationalInsurance as string | undefined,
+        status: q.status as string | undefined,
         sort: q.sort as string | undefined,
         order: q.order as string | undefined,
         page: q.page ? Number(q.page) : undefined,

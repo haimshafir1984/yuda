@@ -17,6 +17,7 @@ export const workshopDto = (w: WorkshopWithSessions) => {
   return {
     id: w.id,
     kind: w.kind,
+    eventType: w.eventType,
     name: w.name,
     subtitle: w.subtitle,
     description: w.description,
@@ -108,6 +109,7 @@ export async function createWorkshop(input: z.infer<typeof workshopCreateSchema>
     const w = await tx.workshop.create({
       data: {
         kind: input.kind,
+        eventType: input.kind === 'EVENT' ? input.eventType ?? 'REGULAR' : null,
         name: input.name,
         subtitle: input.subtitle ?? null,
         description: input.description ?? null,
@@ -154,6 +156,7 @@ export async function updateWorkshop(id: number, input: z.infer<typeof workshopU
       where: { id },
       data: {
         ...(input.name !== undefined && { name: input.name }),
+        ...(input.eventType !== undefined && existing.kind === 'EVENT' && { eventType: input.eventType ?? 'REGULAR' }),
         ...(input.subtitle !== undefined && { subtitle: input.subtitle }),
         ...(input.description !== undefined && { description: input.description }),
         ...(input.facilitator !== undefined && { facilitator: input.facilitator }),

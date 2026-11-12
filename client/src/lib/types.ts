@@ -15,6 +15,7 @@ export interface Member {
   maritalStatus: string | null;
   nationalInsurance: boolean;
   preferredChannel: Channel;
+  status: string;
   joinDate: string;
   tenure: { years: number; months: number };
 }
@@ -32,6 +33,7 @@ export type WorkshopStatus = 'DRAFT' | 'PUBLISHED' | 'ONGOING' | 'FINISHED' | 'C
 export interface Workshop {
   id: number;
   kind: 'WORKSHOP' | 'EVENT';
+  eventType: string | null;
   name: string;
   subtitle: string | null;
   description: string | null;
@@ -334,6 +336,12 @@ export interface SocialProcess {
   typeManual: boolean;
   suggestedType: 'ONE_TIME' | 'ONGOING' | null;
   goal: string | null;
+  programStartDate: string | null;
+  needs: string[];
+  needsNote: string | null;
+  externalResponses: string | null;
+  responses: string[];
+  programNote: string | null;
   status: SocialStatus;
   startDate: string;
   endDate: string | null;
@@ -359,6 +367,7 @@ export interface SocialMeeting {
   topics: string[];
   meetingActions: string[];
   externalPartner: string | null;
+  claimType: string | null;
 }
 export interface SocialIntervention {
   id: number;
@@ -422,3 +431,63 @@ export interface TreatmentTask {
   dueDate: string | null;
   done: boolean;
 }
+
+export interface Removal {
+  id: number;
+  kind: 'TEMPORARY' | 'CONDITIONAL' | 'PERMANENT';
+  date: string;
+  reason: string;
+  description: string | null;
+  handledBy: string | null;
+  endDate: string | null;
+  condition: string | null;
+  complaintId: number | null;
+  returnedAt: string | null;
+  returnedBy: string | null;
+  returnNote: string | null;
+  active: boolean;
+  endDatePassed: boolean;
+}
+export interface ComplaintEntry { id: number; kind: string; date: string; text: string; author: string | null }
+export interface Complaint {
+  id: number;
+  receivedAt: string;
+  complainantType: 'STAFF' | 'MEMBER';
+  complainantMemberId: number | null;
+  complainantName: string | null;
+  subjectMemberId: number;
+  subjectName: string;
+  text: string;
+  status: 'NEW' | 'IN_PROGRESS' | 'HANDLED';
+  actionTaken: string | null;
+  actionNote: string | null;
+  createdBy: string | null;
+  entries: ComplaintEntry[];
+  entryCount?: number;
+}
+export interface ComplaintFull extends Complaint {
+  previous: Complaint[];
+  removals: Removal[];
+  repeat: boolean;
+}
+export interface MediationContact { id: number; kind: string; date: string; withWhom: string | null; summary: string | null; place: string | null; effect: string | null }
+export interface Mediation {
+  id: number;
+  memberId: number;
+  memberName: string;
+  mediator: string;
+  mediator2: string | null;
+  parents: string[];
+  parentsOther: string | null;
+  initiatedBy: 'MEMBER' | 'STAFF';
+  need: string | null;
+  goal: string | null;
+  status: 'ACTIVE' | 'FINISHED';
+  startDate: string;
+  endDate: string | null;
+  goalAchieved: boolean | null;
+  endSummary: string | null;
+  contacts: MediationContact[];
+  contactCount?: number;
+}
+export interface MessageTemplateRow { id: number; key: string; name: string; subject: string | null; body: string; active: boolean }

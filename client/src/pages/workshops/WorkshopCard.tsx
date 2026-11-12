@@ -1,14 +1,15 @@
 import ReadOnlyBanner from '../../components/ReadOnlyBanner';
 import { ReadOnlyScope, useEditState, useIsForeign } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, ExternalLink, Send } from 'lucide-react';
+import { ArrowRight, ExternalLink, MessageSquare, Send } from 'lucide-react';
+import SendMessageDialog from '../../components/SendMessageDialog';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAction } from '../../components/toast';
 import { Badge, Button, Card, Checkbox, Dialog, ErrorBlock, Field, FutureNotice, InlineAlert, Input, PageHeader, Select, Spinner, Tabs, TabsContent, TabsList, Textarea } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
-import { fmtDateRange, fmtMoney, genderLabel, kindLabel, priceTypeLabel, registrationModeLabel, statusLabel } from '../../lib/format';
-import type { Workshop } from '../../lib/types';
+import { fmtDate, fmtDateRange, fmtMoney, genderLabel, kindLabel, priceTypeLabel, registrationModeLabel, statusLabel, workshopEventTypeLabel } from '../../lib/format';
+import type { RegistrantRow, Workshop } from '../../lib/types';
 import { statusTone } from './WorkshopsList';
 import { AttendanceTab, QuestionsTab, RegistrantsTab, SessionsTab } from './WorkshopTabs';
 
@@ -93,7 +94,7 @@ function GeneralTab({ w }: { w: Workshop }) {
 function RegistrationSettingsTab({ w }: { w: Workshop }) {
   const all = useQuery({ queryKey: ['workshops', 'all'], queryFn: () => api.get<Workshop[]>('/workshops') });
   const init = () => ({
-    registrationOpen: w.registrationOpen, registrationMode: w.registrationMode as string, autoCloseRegistration: w.autoCloseRegistration,
+    registrationOpen: w.registrationOpen, registrationMode: w.registrationMode as string, eventType: w.eventType ?? 'REGULAR', autoCloseRegistration: w.autoCloseRegistration,
     genderRestriction: w.genderRestriction ?? '', minAge: w.minAge == null ? '' : String(w.minAge), maxAge: w.maxAge == null ? '' : String(w.maxAge),
     requireNationalInsurance: w.requireNationalInsurance, excludeId: w.excludeParticipantsOfWorkshopId == null ? '' : String(w.excludeParticipantsOfWorkshopId),
     rejectMessage: w.rejectMessage ?? '', closedMessage: w.closedMessage ?? '', completionMessage: w.completionMessage ?? '',
@@ -120,6 +121,7 @@ function RegistrationSettingsTab({ w }: { w: Workshop }) {
     <Card className="max-w-3xl p-5">
       <form noValidate onSubmit={(e) => { e.preventDefault(); if (!mut.isPending) submit(); }} className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
+          {isEvent && <Field label="סוג האירוע"><Select value={v.eventType} onChange={(e) => set('eventType', e.target.value)}>{Object.entries(workshopEventTypeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>}
           <Field label="חובת רישום" hint={isEvent ? undefined : 'בסדנאות תמיד חובה להירשם'}>
             {isEvent ? (
               <Select value={v.registrationMode} onChange={(e) => set('registrationMode', e.target.value)}>
@@ -190,9 +192,11 @@ export default function WorkshopCard() {
   const [tab, setTab] = useState('general');
   const [attendanceSession, setAttendanceSession] = useState<number | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [sending, setSending] = useState(false);
   const { data: w, isLoading, error, refetch } = useQuery({ queryKey: ['workshop', id], queryFn: () => api.get<Workshop>(`/workshops/${id}`) });
   const foreign = useIsForeign(null);
   const readOnly = useEditState().readOnly || foreign.foreign;
+  const regs = useQuery({ queryKey: ['registrations', id, false], queryFn: () => api.get<RegistrantRow[]>(`/workshops/${id}/registrations`, { includeCancelled: false }) });
   const publish = useAction(() => api.post(`/workshops/${id}/publish`), { success: 'הסטטוס עודכן ל"מפורסם באתר"', onSuccess: () => setPublishing(false) });
 
   if (isLoading) return <Spinner />;
@@ -220,6 +224,7 @@ export default function WorkshopCard() {
         subtitle={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <Badge tone="teal">{kindLabel[w.kind]}</Badge>
+            {w.kind === 'EVENT' && w.eventType && <Badge>{workshopEventTypeLabel[w.eventType]}</Badge>}
             <Badge tone={statusTone(w.status)}>{statusLabel[w.status]}</Badge>
             {w.registrationApplies && (w.registrationOpen ? <Badge tone="green">רישום פתוח</Badge> : <Badge>רישום סגור</Badge>)}
             <span>{fmtDateRange(w.startDate, w.endDate)}</span>
@@ -234,6 +239,9 @@ export default function WorkshopCard() {
                 <Send className="size-4" aria-hidden /> פרסם באתר
               </Button>
             )}
+            <Button disabled={readOnly || !(regs.data ?? []).length} title={(regs.data ?? []).length ? undefined : 'אין נרשמים פעילים'} onClick={() => setSending(true)}>
+              <MessageSquare className="size-4" aria-hidden /> שליחת הודעה לנרשמים
+            </Button>
             <Button onClick={() => window.open(`/register/${w.id}`, '_blank')}>
               <ExternalLink className="size-4" aria-hidden /> פתח דף רישום לדוגמה
             </Button>
@@ -261,6 +269,7 @@ export default function WorkshopCard() {
         <TabsContent value="summary"><SummaryTab w={w} /></TabsContent>
       </Tabs>
       </ReadOnlyScope>
+      <SendMessageDialog open={sending} onClose={() => setSending(false)} memberIds={(regs.data ?? []).map((r) => r.memberId)} recipientLabel={`${(regs.data ?? []).length} נרשמים ל${w.name}`} related={{ type: 'WORKSHOP', id: w.id }} presetVars={{ פעילות: w.name, תאריך: fmtDate(w.startDate), שעה: w.startTime ?? '' }} />
 
       <Dialog
         open={publishing}

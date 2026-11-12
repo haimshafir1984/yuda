@@ -1,4 +1,4 @@
-import { useCan } from '../../lib/auth';
+import { useAuth, useCan } from '../../lib/auth';
 import { useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { ReactNode, useState } from 'react';
@@ -10,6 +10,7 @@ import {
 } from '../../components/ui';
 import { api } from '../../lib/api';
 import { attendanceLabel, copayPaymentLabel, fmtDate, fmtDateRange, fmtDateTime, fmtMoney, kindLabel, kindLabel2, processTypeLabel, requestStatusLabel, requestStatusTone, requestTypeLabel, socialStatusLabel, socialStatusTone, statusLabel, trackLabel, treatmentStatusLabel, treatmentStatusTone } from '../../lib/format';
+import { MediationSection } from './MemberStatusTabs';
 import type { ActivityRow, ExceptionRow, Member, MemberCopayRow, MemberNote, MemberSessionAttendance, Restriction, ServiceRequest, SocialProcess, Treatment, TreatmentExceptionRow, Workshop } from '../../lib/types';
 
 const FILTERS = [
@@ -320,6 +321,7 @@ export function SocialServicesTab({ member }: { member: Member }) {
   const canT = useCan('treatments', 1);
   const canS = useCan('socialWork', 1);
   const canR = useCan('requests', 1);
+  const { me } = useAuth();
   const q = useQuery({ queryKey: ['member-treatments', member.id], queryFn: () => api.get<Treatment[]>(`/members/${member.id}/treatments`), enabled: canT });
   const sw = useQuery({ queryKey: ['member-social-work', member.id], queryFn: () => api.get<SocialProcess[]>(`/members/${member.id}/social-work`), enabled: canS });
   const rq = useQuery({ queryKey: ['member-service-requests', member.id], queryFn: () => api.get<ServiceRequest[]>(`/members/${member.id}/service-requests`), enabled: canR });
@@ -396,6 +398,7 @@ export function SocialServicesTab({ member }: { member: Member }) {
       <Section hidden={!canR} title="פניות ובקשות סיוע" button={<Button variant="primary" size="sm" onClick={() => nav(`/requests/new?memberId=${member.id}`)}><Plus className="size-4" aria-hidden /> פנייה חדשה</Button>}>
         <DataTable caption="פניות ובקשות סיוע של החבר" columns={rCols} rows={rq.data ?? []} rowKey={(r) => r.id} onRowClick={openR} empty={<EmptyState title="אין פניות" />} />
       </Section>
+      {canR && me?.user?.role !== 'NURSE' && <MediationSection member={member} />}
       <Section hidden={!canS} title="הערות העו״סית בכרטיס החבר" button={<Button variant="primary" size="sm" onClick={() => { setNoteError(''); setNoteOpen(true); }}><Plus className="size-4" aria-hidden /> הוסף הערה</Button>}>
         <DataTable caption="הערות עו״סית" columns={noteCols} rows={notes.data ?? []} rowKey={(n) => n.id} empty={<EmptyState title="אין הערות" text="הערות שהעו״סית כותבת ישירות בכרטיס החבר." />} />
       </Section>

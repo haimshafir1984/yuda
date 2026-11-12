@@ -13,7 +13,7 @@ export const REQUEST_SOURCES = ['WEBSITE', 'PHONE', 'MEETING', 'MANUAL', 'OTHER'
 export const PRIORITIES = ['NORMAL', 'HIGH', 'URGENT'] as const;
 export const REQUEST_STATUSES = ['NEW', 'REVIEW', 'WAITING_INFO', 'IN_PROGRESS', 'HANDLED', 'REJECTED', 'CLOSED'] as const;
 export const DECISIONS = ['SOCIAL_WORK_NEEDED', 'PSYCH_REFERRAL', 'EXTERNAL_REFERRAL', 'ANSWERED', 'REJECTED', 'MORE_INFO'] as const;
-export const MODES = ['FACE', 'PHONE', 'ONLINE', 'OTHER'] as const;
+export const MODES = ['FACE', 'PHONE', 'ONLINE', 'MESSAGE', 'OTHER'] as const; // MESSAGE: הודעה (ללא פורמט ומשך)
 
 export const requestCreateSchema = z.object({
   memberId: z.number({ required_error: 'יש לבחור חבר' }).int(),
@@ -47,6 +47,9 @@ export const contactSchema = z.object({
 });
 export const decisionSchema = z.object({ decision: z.enum(DECISIONS), note: optStr(2000) });
 
+export const CLAIM_TYPES = ['NI_DISABILITY', 'REHAB_BASKET', 'HOUSING_ASSISTANCE'] as const;
+export const NEEDS = ['EMPLOYMENT', 'STUDIES', 'RIGHTS', 'EMOTIONAL', 'SOCIAL', 'COMMUNITY', 'IDENTITY', 'FAMILY'] as const;
+export const RESPONSES = ['CLUB_COURSES', 'WORKSHOPS', 'SCHOLARSHIP_PROGRAM', 'SHABBAT_MEALS', 'COMMUNITY_EVENTS', 'FAMILY_MEDIATION', 'PSYCH_TREATMENT', 'EXTERNAL_REFERRAL'] as const;
 export const KINDS = ['RIGHTS', 'SUPPORT', 'PARENT_MEDIATION', 'FAMILY', 'EMOTIONAL', 'BUREAUCRATIC', 'OTHER'] as const;
 export const PROCESS_TYPES = ['ONE_TIME', 'ONGOING'] as const;
 export const kindsSchema = z.array(z.enum(KINDS)).min(1, 'יש לבחור לפחות מהות ליווי אחת').max(KINDS.length);
@@ -71,6 +74,13 @@ export const processUpdateSchema = z.object({
   type: z.enum(TYPE_CHOICES).optional(),
   goal: optStr(2000),
   startDate: dateStr.optional(),
+  // כרטיס תכנית (חברי ביטוח לאומי בלבד)
+  programStartDate: z.preprocess(emptyToNull, dateStr.nullable().optional()),
+  needs: z.array(z.enum(NEEDS)).optional(),
+  needsNote: optStr(2000),
+  externalResponses: optStr(2000),
+  responses: z.array(z.enum(RESPONSES)).optional(),
+  programNote: optStr(3000),
 });
 
 export const END_REASONS = ['COMPLETED', 'GOAL_ACHIEVED', 'DROPOUT', 'TRANSFERRED', 'MEMBER_REQUEST', 'OTHER'] as const;
@@ -82,8 +92,14 @@ export const finishSocialSchema = z.object({
 export const noteOptSchema = z.object({ note: optStr(1000) });
 export const linkTreatmentSchema = z.object({ treatmentId: z.number({ required_error: 'יש לבחור תהליך שפ"ח' }).int() });
 
-export const TOPICS = ['WORK', 'RESERVE_DUTY', 'STUDIES', 'FAMILY', 'NATIONAL_INSURANCE', 'RELATIONSHIP'] as const;
-export const MEETING_ACTIONS = ['NI_PROGRAM', 'PSYCH_PROGRAM', 'SCHOLARSHIPS', 'EMPLOYMENT', 'EXTERNAL_PARTNER'] as const;
+export const TOPICS = [
+  'WORK', 'RESERVE_DUTY', 'STUDIES', 'FAMILY', 'NATIONAL_INSURANCE', 'RELATIONSHIP',
+  // נוספו בעדכון האפיון (נובמבר 2026)
+  'PERSONAL_SUPPORT', 'BUILD_PLAN', 'ONGOING_FOLLOWUP', 'SPOT_CONSULT', 'RIGHTS', 'REHAB_SERVICES', 'HOUSING', 'EMPLOYMENT', 'MILITARY_SERVICE', 'OTHER',
+  'TREATMENT_INTAKE', 'TREATMENT_MATCH', 'TREATMENT_FOLLOWUP', 'CONTRACT_SIGNING', 'TREATMENT_EXTENSION', 'TREATMENT_END',
+  'PARENTS_EVENING', 'PARENTS_MEDIATION',
+] as const;
+export const MEETING_ACTIONS = ['NI_PROGRAM', 'PSYCH_PROGRAM', 'SCHOLARSHIPS', 'EMPLOYMENT', 'EXTERNAL_PARTNER', 'STUDY_GUIDANCE', 'CLAIM'] as const;
 
 export const meetingSchema = z
   .object({
@@ -99,6 +115,7 @@ export const meetingSchema = z
     cancelReason: optStr(500),
     topics: z.array(z.enum(TOPICS)).default([]),
     meetingActions: z.array(z.enum(MEETING_ACTIONS)).default([]),
+    claimType: z.preprocess(emptyToNull, z.enum(CLAIM_TYPES).nullable().optional()),
     externalPartner: optStr(200),
   })
   .superRefine((v, ctx) => {

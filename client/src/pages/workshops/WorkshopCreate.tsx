@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAction } from '../../components/toast';
 import { Button, Card, Checkbox, Field, Input, PageHeader, Select, Textarea } from '../../components/ui';
-import { priceTypeLabel, registrationModeLabel } from '../../lib/format';
+import { priceTypeLabel, registrationModeLabel, workshopEventTypeLabel } from '../../lib/format';
 import { api, ApiError } from '../../lib/api';
 import type { Workshop } from '../../lib/types';
 
@@ -14,7 +14,7 @@ export default function WorkshopCreate() {
 
   const [v, setV] = useState({
     name: '', subtitle: '', description: '', facilitator: '', format: 'SINGLE', startDate: '', startTime: '', endTime: '',
-    sessionCount: '3', isPaid: false, price: '', priceType: 'FIXED', registrationMode: 'REQUIRED', nationalInsurance: false,
+    sessionCount: '3', isPaid: false, price: '', priceType: 'FIXED', registrationMode: 'REQUIRED', eventType: 'REGULAR', nationalInsurance: false,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => {
@@ -56,6 +56,7 @@ export default function WorkshopCreate() {
       price: v.isPaid ? Number(v.price) : null,
       priceType: v.priceType,
       registrationMode: kind === 'EVENT' ? v.registrationMode : 'REQUIRED',
+      eventType: kind === 'EVENT' ? v.eventType : null,
       nationalInsurance: v.nationalInsurance,
     });
   };
@@ -120,6 +121,9 @@ export default function WorkshopCreate() {
             )}
             {v.isPaid && multi && (
               <Field label="סוג המחיר"><Select value={v.priceType} onChange={(e) => set('priceType', e.target.value)}>{Object.entries(priceTypeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
+            )}
+            {kind === 'EVENT' && (
+              <Field label="סוג האירוע" hint="לסינון. חלק מהאירועים נחשבים שירותים סוציאליים"><Select value={v.eventType} onChange={(e) => set('eventType', e.target.value)}>{Object.entries(workshopEventTypeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
             )}
             {kind === 'EVENT' && (
               <Field label="חובת רישום"><Select value={v.registrationMode} onChange={(e) => set('registrationMode', e.target.value)}>{Object.entries(registrationModeLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>

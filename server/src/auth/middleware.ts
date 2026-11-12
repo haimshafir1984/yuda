@@ -81,6 +81,10 @@ export async function requireAccess(req: Request, _res: Response, next: NextFunc
     if (level < needed)
       throw new AppError(403, 'FORBIDDEN', needed === LEVEL.VIEW ? `אין לך הרשאה לצפות באזור "${AREA_LABEL[area]}"` : `אין לך הרשאה לבצע שינויים באזור "${AREA_LABEL[area]}" (נדרשת הרשאת ${needed === LEVEL.MANAGE ? 'ניהול' : 'עריכה'})`);
 
+    // גישור משפחתי: לא לאחות (המגשר, העו"סיות והמנהלים בלבד)
+    if (user.role === 'NURSE' && /^\/(mediations(\/|$)|members\/\d+\/mediations$)/.test(req.path))
+      throw new AppError(403, 'FORBIDDEN', 'אין לך הרשאה לאזור הגישור המשפחתי');
+
     // אחות ומגשר: גישה לפניות מהקטגוריה שלהם בלבד
     const scope = REQUEST_SCOPE[user.role];
     if (area === 'requests' && scope) {

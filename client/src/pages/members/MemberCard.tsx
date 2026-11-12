@@ -1,15 +1,17 @@
 import ReadOnlyBanner from '../../components/ReadOnlyBanner';
-import { useEditState } from '../../lib/auth';
+import { useCan, useEditState } from '../../lib/auth';
+import SendMessageDialog from '../../components/SendMessageDialog';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Pencil } from 'lucide-react';
+import { ArrowRight, MessageSquare, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAction } from '../../components/toast';
 import { Badge, Button, Card, ErrorBlock, FutureNotice, Ltr, PageHeader, Spinner, Tabs, TabsContent, TabsList } from '../../components/ui';
 import { api } from '../../lib/api';
-import { channelLabel, fmtDate, fmtTenure, genderLabel, maritalLabel } from '../../lib/format';
+import { channelLabel, fmtDate, fmtTenure, genderLabel, isRemoved, maritalLabel, memberStatusLabel, memberStatusTone } from '../../lib/format';
 import type { Member } from '../../lib/types';
 import MemberForm, { fromMember } from './MemberForm';
+import { ComplaintsTab, StaffNotes, StatusTab } from './MemberStatusTabs';
 import { ActivityTab, ExceptionsTab, LedgerTab, PreferencesTab, RestrictionsTab, SocialServicesTab } from './MemberTabs';
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
@@ -35,6 +37,7 @@ function PersonalTab({ member, editing, setEditing }: { member: Member; editing:
       </Card>
     );
   return (
+    <div className="space-y-4">
     <Card className="p-5">
       <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
         <Detail label="שם פרטי">{member.firstName}</Detail>
@@ -48,11 +51,14 @@ function PersonalTab({ member, editing, setEditing }: { member: Member; editing:
         <Detail label="שייך לתכנית ביטוח לאומי">{member.nationalInsurance ? 'כן' : 'לא'}</Detail>
         <Detail label="ערוץ תקשורת מועדף">{channelLabel[member.preferredChannel]}</Detail>
         <Detail label="תאריך הצטרפות">{fmtDate(member.joinDate)}</Detail>
+        <Detail label="סטטוס"><Badge tone={memberStatusTone(member.status)}>{memberStatusLabel[member.status] ?? member.status}</Badge></Detail>
       </dl>
       <Button className="mt-5" onClick={() => setEditing(true)}>
         <Pencil className="size-4" aria-hidden /> עריכת פרטים
       </Button>
     </Card>
+    <StaffNotes memberId={member.id} />
+    </div>
   );
 }
 
@@ -63,6 +69,8 @@ export default function MemberCard() {
   const [tab, setTab] = useState('personal');
   const { data: m, isLoading, error, refetch } = useQuery({ queryKey: ['member', id], queryFn: () => api.get<Member>(`/members/${id}`) });
   const { readOnly } = useEditState();
+  const canSocial = useCan('socialWork', 1);
+  const [sending, setSending] = useState(false);
 
   if (isLoading) return <Spinner />;
   if (error || !m) return <ErrorBlock error={error ?? new Error('החבר לא נמצא')} onRetry={() => refetch()} />;
@@ -76,6 +84,8 @@ export default function MemberCard() {
     { value: 'family', label: 'קשר משפחתי', future: true },
     { value: 'ledger', label: 'כרטסת' },
     { value: 'prefs', label: 'העדפות' },
+    { value: 'status', label: 'סטטוס והרחקות' },
+    ...(canSocial ? [{ value: 'complaints', label: 'דיווחים ותלונות' }] : []),
     { value: 'restrictions', label: 'הגבלות' },
     { value: 'exceptions', label: 'חריגות' },
   ];
@@ -93,6 +103,7 @@ export default function MemberCard() {
             <span>גיל: {m.age ?? 'לא ידוע'}</span>
             <span>ותק: {fmtTenure(m.tenure)}</span>
             {m.nationalInsurance && <Badge tone="teal">ביטוח לאומי</Badge>}
+            <Badge tone={memberStatusTone(m.status)}>{memberStatusLabel[m.status] ?? m.status}</Badge>
           </span>
         }
         actions={
@@ -105,6 +116,9 @@ export default function MemberCard() {
               }}
             >
               <Pencil className="size-4" aria-hidden /> עריכה
+            </Button>
+            <Button disabled={readOnly} onClick={() => setSending(true)}>
+              <MessageSquare className="size-4" aria-hidden /> שליחת הודעה
             </Button>
             <Button onClick={() => nav('/members')}>
               <ArrowRight className="size-4" aria-hidden /> חזרה לרשימת החברים
@@ -139,6 +153,12 @@ export default function MemberCard() {
         <TabsContent value="prefs">
           <PreferencesTab member={m} />
         </TabsContent>
+        <TabsContent value="status">
+          <StatusTab member={m} />
+        </TabsContent>
+        <TabsContent value="complaints">
+          <ComplaintsTab member={m} />
+        </TabsContent>
         <TabsContent value="restrictions">
           <RestrictionsTab memberId={m.id} />
         </TabsContent>
@@ -146,6 +166,8 @@ export default function MemberCard() {
           <ExceptionsTab memberId={m.id} />
         </TabsContent>
       </Tabs>
+      <SendMessageDialog open={sending} onClose={() => setSending(false)} memberIds={[m.id]} recipientLabel={m.fullName} related={{ type: 'MEMBER', id: m.id }} />
+      {isRemoved(m.status) && <span className="sr-only">חבר מורחק</span>}
     </>
   );
 }

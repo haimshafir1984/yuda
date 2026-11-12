@@ -36,6 +36,7 @@ export async function assertCanRegister(
 ) {
   const member = await db.member.findUnique({ where: { id: memberId } });
   if (!member) throw new AppError(404, 'MEMBER_NOT_FOUND', 'החבר לא נמצא');
+  if (member.status.startsWith('REMOVED')) throw new AppError(403, 'MEMBER_REMOVED', 'החבר מורחק ולכן אינו יכול להירשם לפעילויות');
   const workshop = await db.workshop.findUnique({
     where: { id: workshopId },
     include: { questions: { include: { options: true }, orderBy: { sortOrder: 'asc' } } },

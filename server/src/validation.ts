@@ -45,6 +45,8 @@ export const memberSchema = z.object({
 });
 export type MemberInput = z.infer<typeof memberSchema>;
 
+export const EVENT_TYPES = ['REGULAR', 'YODIT', 'STUDENT_DAY', 'SCHOLARSHIP_FAIR', 'BUREAUCRACY', 'OTHER'] as const;
+
 export const workshopCreateSchema = z
   .object({
     kind: z.enum(['WORKSHOP', 'EVENT']),
@@ -61,6 +63,7 @@ export const workshopCreateSchema = z
     price: optPrice,
     priceType: z.enum(['FIXED', 'MONTHLY']).default('FIXED'),
     registrationMode: z.enum(['REQUIRED', 'NOT_NEEDED', 'RECOMMENDED']).default('REQUIRED'),
+    eventType: z.preprocess(emptyToNull, z.enum(EVENT_TYPES).nullable().optional()),
     nationalInsurance: z.boolean().default(false),
   })
   .superRefine((v, ctx) => {
@@ -85,6 +88,7 @@ export const workshopUpdateSchema = z
     status: z.enum(WORKSHOP_STATUSES),
     registrationOpen: z.boolean(),
     registrationMode: z.enum(['REQUIRED', 'NOT_NEEDED', 'RECOMMENDED']),
+    eventType: z.preprocess(emptyToNull, z.enum(EVENT_TYPES).nullable().optional()),
     autoCloseRegistration: z.boolean(),
     priceType: z.enum(['FIXED', 'MONTHLY']),
     excludeParticipantsOfWorkshopId: z.preprocess((v) => (v === '' ? null : v), z.number().int().nullable().optional()),

@@ -2,9 +2,13 @@ import { Prisma, Member } from '@prisma/client';
 import { prisma } from '../db';
 import { currentActorName } from '../auth/context';
 import { AppError, notFound } from '../errors';
-import { ageFromBirthYear, parseDateOnly, tenureFromJoinDate, toDateOnly, todayDateOnly } from '../lib/dates';
+import { addDays, ageFromBirthYear, parseDateOnly, tenureFromJoinDate, toDateOnly, todayDateOnly } from '../lib/dates';
 import { normalizePhone } from '../lib/phone';
 import { MemberInput } from '../validation';
+
+export const MEMBER_STATUSES = ['ACTIVE', 'INACTIVE', 'REMOVED_TEMP', 'REMOVED_CONDITIONAL', 'REMOVED_PERMANENT'] as const;
+export const REMOVAL_KINDS = ['TEMPORARY', 'CONDITIONAL', 'PERMANENT'] as const;
+const STATUS_OF_KIND = { TEMPORARY: 'REMOVED_TEMP', CONDITIONAL: 'REMOVED_CONDITIONAL', PERMANENT: 'REMOVED_PERMANENT' } as const;
 
 export const memberDto = (m: Member) => ({
   id: m.id,
@@ -20,6 +24,7 @@ export const memberDto = (m: Member) => ({
   maritalStatus: m.maritalStatus,
   nationalInsurance: m.nationalInsurance,
   preferredChannel: m.preferredChannel,
+  status: m.status,
   joinDate: toDateOnly(m.joinDate),
   tenure: tenureFromJoinDate(m.joinDate),
 });
@@ -28,6 +33,7 @@ export interface MemberListQuery {
   q?: string;
   gender?: string;
   nationalInsurance?: string;
+  status?: string;
   sort?: string;
   order?: string;
   page?: number;
@@ -57,6 +63,8 @@ export async function listMembers(query: MemberListQuery) {
   if (query.gender === 'MALE' || query.gender === 'FEMALE') where.gender = query.gender;
   if (query.nationalInsurance === 'true') where.nationalInsurance = true;
   if (query.nationalInsurance === 'false') where.nationalInsurance = false;
+  if (query.status === 'REMOVED') where.status = { startsWith: 'REMOVED' };
+  else if (query.status && (MEMBER_STATUSES as readonly string[]).includes(query.status)) where.status = query.status;
 
   const dir: 'asc' | 'desc' = query.order === 'desc' ? 'desc' : 'asc';
   const page = Math.max(1, query.page ?? 1);
@@ -332,16 +340,16 @@ export async function addRestriction(
 
 // ---------- הערות עו"סית בכרטיס החבר (טבלה נפרדת, לא בטבלת החברים הראשית) ----------
 
-export async function listNotes(memberId: number) {
+export async function listNotes(memberId: number, kind: 'SOCIAL' | 'GENERAL' = 'SOCIAL') {
   await getMember(memberId);
-  const rows = await prisma.memberNote.findMany({ where: { memberId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+  const rows = await prisma.memberNote.findMany({ where: { memberId, kind }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
   return rows.map((n) => ({ id: n.id, text: n.text, author: n.author, createdAt: n.createdAt.toISOString() }));
 }
 
-export async function addNote(memberId: number, text: string, author: string | null | undefined) {
+export async function addNote(memberId: number, text: string, author: string | null | undefined, kind: 'SOCIAL' | 'GENERAL' = 'SOCIAL') {
   await getMember(memberId);
-  await prisma.memberNote.create({ data: { memberId, text, author: author ?? currentActorName() } });
-  return listNotes(memberId);
+  await prisma.memberNote.create({ data: { memberId, kind, text, author: author ?? currentActorName() } });
+  return listNotes(memberId, kind);
 }
 
 export async function removeRestriction(memberId: number, restrictionId: number) {

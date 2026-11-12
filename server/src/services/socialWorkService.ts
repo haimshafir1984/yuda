@@ -60,6 +60,12 @@ export const processDto = (p: ProcessFull) => {
     // כשהסוג נקבע ידנית מוצגת הצעה בלבד; כשהוא אוטומטי הוא מתעדכן מעצמו
     suggestedType: p.typeManual && suggested !== p.type ? suggested : null,
     goal: p.goal,
+    programStartDate: toDateOnly(p.programStartDate),
+    needs: csv(p.needs),
+    needsNote: p.needsNote,
+    externalResponses: p.externalResponses,
+    responses: csv(p.responses),
+    programNote: p.programNote,
     status: p.status,
     startDate: toDateOnly(p.startDate)!,
     endDate: toDateOnly(p.endDate),
@@ -171,6 +177,18 @@ export async function updateProcess(id: number, input: z.infer<typeof processUpd
       data.kinds = input.kinds.join(',');
       await event(tx, id, 'KINDS_CHANGED', `מהות הליווי שונתה ל: ${input.kinds.map((k) => KIND_LABEL[k]).join(', ')}`);
     }
+    const programTouched = input.programStartDate !== undefined || input.needs !== undefined || input.needsNote !== undefined || input.externalResponses !== undefined || input.responses !== undefined || input.programNote !== undefined;
+    if (programTouched) {
+      // כרטיס תכנית קיים רק לחברים ששייכים לתכנית ביטוח לאומי
+      if (!p.member.nationalInsurance) throw new AppError(422, 'NOT_NATIONAL_INSURANCE', 'כרטיס תכנית זמין רק לחברים ששייכים לתכנית ביטוח לאומי');
+      if (input.programStartDate !== undefined) data.programStartDate = input.programStartDate ? parseDateOnly(input.programStartDate) : null;
+      if (input.needs !== undefined) data.needs = input.needs.join(',') || null;
+      if (input.needsNote !== undefined) data.needsNote = input.needsNote;
+      if (input.externalResponses !== undefined) data.externalResponses = input.externalResponses;
+      if (input.responses !== undefined) data.responses = input.responses.join(',') || null;
+      if (input.programNote !== undefined) data.programNote = input.programNote;
+      changes.push('כרטיס התכנית');
+    }
     if (changes.length) await event(tx, id, 'EDITED', `עודכנו: ${changes.join(', ')}`);
     await tx.socialWorkProcess.update({ where: { id }, data });
     await applyAutoType(tx, id);
@@ -222,7 +240,7 @@ const csv = (v: string | null) => (v ? v.split(',').filter(Boolean) : []);
 const meetingDto = (m: MeetingRow, number: number | null) => ({
   id: m.id, processId: m.processId, ...ts(m.meetingAt), number, subject: m.subject, mode: m.mode, durationMinutes: m.durationMinutes,
   summary: m.summary, followUpNotes: m.followUpNotes, followUpRequired: m.followUpRequired,
-  status: m.status, cancelReason: m.cancelReason, topics: csv(m.topics), meetingActions: csv(m.meetingActions), externalPartner: m.externalPartner,
+  status: m.status, cancelReason: m.cancelReason, topics: csv(m.topics), meetingActions: csv(m.meetingActions), externalPartner: m.externalPartner, claimType: m.claimType,
 });
 
 export async function listMeetings(processId: number) {
@@ -235,11 +253,12 @@ export async function listMeetings(processId: number) {
 }
 
 const meetingData = (input: z.infer<typeof meetingSchema>, subject: string) => ({
-  meetingAt: parseMeeting(input.date, input.time), subject, mode: input.mode, durationMinutes: input.durationMinutes ?? 60,
+  meetingAt: parseMeeting(input.date, input.time), subject, mode: input.mode, durationMinutes: input.mode === 'MESSAGE' ? null : input.durationMinutes ?? 60, // להודעה אין משך
   summary: input.summary ?? null, followUpNotes: input.followUpNotes ?? null, followUpRequired: input.followUpRequired,
   status: input.status, cancelReason: input.status === 'CANCELLED' ? input.cancelReason ?? null : null,
   topics: input.topics.join(',') || null, meetingActions: input.meetingActions.join(',') || null,
   externalPartner: input.meetingActions.includes('EXTERNAL_PARTNER') ? input.externalPartner ?? null : null,
+  claimType: input.meetingActions.includes('CLAIM') ? input.claimType ?? null : null,
 });
 const defaultSubject = (kinds: string) => KIND_LABEL[kinds.split(',')[0]] ?? 'פגישה';
 
@@ -272,7 +291,7 @@ export async function updateMeeting(meetingId: number, input: z.infer<typeof mee
     if (data.summary !== m.summary) changed.push('סיכום');
     if (data.followUpNotes !== m.followUpNotes || input.followUpRequired !== m.followUpRequired) changed.push('המשך טיפול');
     if (data.status !== m.status) changed.push(data.status === 'CANCELLED' ? 'סומנה כבוטלה' : 'סומנה כהתקיימה');
-    if (data.topics !== m.topics || data.meetingActions !== m.meetingActions || data.externalPartner !== m.externalPartner) changed.push('נושאים והתערבויות');
+    if (data.topics !== m.topics || data.meetingActions !== m.meetingActions || data.externalPartner !== m.externalPartner || data.claimType !== m.claimType) changed.push('נושאים והתערבויות');
     await tx.socialWorkMeeting.update({ where: { id: meetingId }, data });
     if (changed.length) await event(tx, m.processId, 'MEETING_EDITED', `פגישה "${m.subject}" עודכנה: ${changed.join(', ')}`);
     await applyAutoType(tx, m.processId);

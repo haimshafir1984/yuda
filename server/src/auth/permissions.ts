@@ -62,7 +62,11 @@ export const permissionsOf = (role: Role) => MATRIX[role];
 const AREA_RULES: [RegExp, Area | 'staff'][] = [
   [/^\/members\/\d+\/(treatments|treatment-copay|treatment-exceptions)$/, 'treatments'],
   [/^\/members\/\d+\/social-work$/, 'socialWork'],
-  [/^\/members\/\d+\/notes$/, 'socialWork'],
+  [/^\/members\/\d+\/(notes|complaints)$/, 'socialWork'],
+  [/^\/members\/\d+\/mediations$/, 'requests'],
+  [/^\/(mediations)(\/|$)/, 'requests'],
+  [/^\/complaints(\/|$)/, 'socialWork'],
+  [/^\/messages\/(send|send-options)$/, 'members'],
   [/^\/members\/\d+\/service-requests$/, 'requests'],
   [/^\/members(\/|$)/, 'members'],
   [/^\/(workshops|sessions|questions|registrations)(\/|$)/, 'workshops'],

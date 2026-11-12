@@ -1,18 +1,20 @@
 import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, ClipboardList, HeartHandshake, LifeBuoy, LogOut, Menu, Settings, Users } from 'lucide-react';
+import { CalendarDays, ClipboardList, Handshake, HeartHandshake, LifeBuoy, LogOut, Menu, Settings, ShieldAlert, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { api } from '../lib/api';
 import { Area, useAuth } from '../lib/auth';
 import { useAction } from './toast';
 
-const NAV: { to: string; label: string; icon: typeof Users; area: Area }[] = [
+const NAV: { to: string; label: string; icon: typeof Users; area: Area; hideForRoles?: string[] }[] = [
   { to: '/members', label: 'חברים', icon: Users, area: 'members' },
   { to: '/workshops', label: 'סדנאות ואירועים', icon: CalendarDays, area: 'workshops' },
   { to: '/treatments', label: 'ליווי טיפול פסיכולוגי (שפ"ח)', icon: HeartHandshake, area: 'treatments' },
   { to: '/requests', label: 'פניות ובקשות סיוע', icon: ClipboardList, area: 'requests' },
   { to: '/social-work', label: 'ליווי עו"ס', icon: LifeBuoy, area: 'socialWork' },
+  { to: '/mediations', label: 'גישור משפחתי', icon: Handshake, area: 'requests', hideForRoles: ['NURSE'] },
+  { to: '/complaints', label: 'דיווחים ותלונות', icon: ShieldAlert, area: 'socialWork' },
   { to: '/settings', label: 'הגדרות', icon: Settings, area: 'settings' },
 ];
 
@@ -30,7 +32,7 @@ export default function Layout() {
   const location = useLocation();
   const { me, can } = useAuth();
   const qc = useQueryClient();
-  const nav = NAV.filter((n) => can(n.area));
+  const nav = NAV.filter((n) => can(n.area) && !n.hideForRoles?.includes(me?.user?.role ?? ''));
   // החלפת משתמש: מנקים את הנתונים של המשתמש הקודם ומציגים את מסך הכניסה
   const logout = useAction(() => api.post('/auth/logout'), { onSuccess: () => { try { sessionStorage.setItem('crm-pick-user', '1'); } catch { /* ignore */ } qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth' }); void qc.invalidateQueries({ queryKey: ['auth', 'me'] }); } });
 

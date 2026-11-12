@@ -5,6 +5,8 @@ import Layout from './components/Layout';
 import { Card, EmptyState, Spinner } from './components/ui';
 import { api } from './lib/api';
 import { Area, useAuth } from './lib/auth';
+import { ComplaintCard, ComplaintsList } from './pages/complaints/ComplaintsPages';
+import { MediationCard, MediationList } from './pages/mediation/MediationPages';
 import LoginPage from './pages/LoginPage';
 import MemberCard from './pages/members/MemberCard';
 import MemberCreate from './pages/members/MemberCreate';
@@ -95,6 +97,10 @@ export default function App() {
           <Route path="/social-work" element={g('socialWork', <SocialList />)} />
           <Route path="/social-work/new" element={g('socialWork', <SocialCreate />)} />
           <Route path="/social-work/:id" element={g('socialWork', <SocialCard />)} />
+          <Route path="/complaints" element={g('socialWork', <ComplaintsList />)} />
+          <Route path="/complaints/:id" element={g('socialWork', <ComplaintCard />)} />
+          <Route path="/mediations" element={g('requests', <MediationList />)} />
+          <Route path="/mediations/:id" element={g('requests', <MediationCard />)} />
           <Route path="/settings" element={g('settings', <SettingsPage />)} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

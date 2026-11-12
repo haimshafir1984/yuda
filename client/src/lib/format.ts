@@ -143,7 +143,7 @@ export const requestEventLabel: Record<string, string> = {
   CREATED: 'פתיחת פנייה', EDITED: 'עריכת פרטים', ASSIGNED: 'שיוך אחראי', STATUS_CHANGE: 'שינוי סטטוס', NOTE: 'הערת טיפול', CONTACT: 'תיעוד שיחה או פגישה',
   DECISION: 'החלטה', PROCESS_OPENED: 'נפתח תהליך ליווי', TREATMENT_LINKED: 'קישור לשפ"ח',
 };
-export const modeLabel: Record<string, string> = { FACE: 'פרונטלית', PHONE: 'טלפונית', ONLINE: 'מקוונת', OTHER: 'אחר' };
+export const modeLabel: Record<string, string> = { FACE: 'פרונטלית', PHONE: 'טלפונית', ONLINE: 'מקוונת (זום)', MESSAGE: 'הודעה', OTHER: 'אחר' };
 export const staffFallback = ['אורית לביא', 'רונית כץ', 'שירה אדלר'];
 
 export const kindLabel2: Record<string, string> = {
@@ -172,9 +172,22 @@ export const socialEventLabel: Record<string, string> = {
 export const registrationModeLabel = { REQUIRED: 'חייב להירשם', NOT_NEEDED: 'אין צורך להירשם', RECOMMENDED: 'לא חובה להירשם אבל מומלץ' } as const;
 export const priceTypeLabel = { FIXED: 'מחיר קבוע', MONTHLY: 'מחיר לחודש' } as const;
 export const questionTypeLabel = { TEXT: 'טקסט חופשי', SINGLE_CHOICE: 'בחירה יחידה (כפתורי רדיו)', MULTI_CHOICE: 'בחירה מרובה (צ\'קבוקס)' } as const;
-export const topicLabel: Record<string, string> = { WORK: 'עבודה', RESERVE_DUTY: 'מילואים', STUDIES: 'לימודים', FAMILY: 'משפחה', NATIONAL_INSURANCE: 'ביטוח לאומי', RELATIONSHIP: 'זוגיות' };
+export const topicLabel: Record<string, string> = {
+  WORK: 'עבודה', RESERVE_DUTY: 'מילואים', STUDIES: 'לימודים', FAMILY: 'משפחה', NATIONAL_INSURANCE: 'ביטוח לאומי', RELATIONSHIP: 'זוגיות',
+  PERSONAL_SUPPORT: 'תמיכה וליווי אישי', BUILD_PLAN: 'בניית תוכנית אישית', ONGOING_FOLLOWUP: 'מעקב וליווי שוטף', SPOT_CONSULT: 'התייעצות נקודתית',
+  RIGHTS: 'מיצוי זכויות', REHAB_SERVICES: 'שירותי שיקום וטיפול', HOUSING: 'דיור', EMPLOYMENT: 'תעסוקה', MILITARY_SERVICE: 'שירות צבאי', OTHER: 'אחר',
+  TREATMENT_INTAKE: 'טיפול: אינטייק', TREATMENT_MATCH: 'טיפול: התאמת טיפול', TREATMENT_FOLLOWUP: 'טיפול: מעקב אחר הטיפול', CONTRACT_SIGNING: 'טיפול: חתימת חוזה',
+  TREATMENT_EXTENSION: 'טיפול: הארכת טיפול', TREATMENT_END: 'טיפול: סיום טיפול', PARENTS_EVENING: 'גישור משפחתי: ערב הורים', PARENTS_MEDIATION: 'גישור משפחתי: גישור מול ההורים',
+};
+export const claimTypeLabel: Record<string, string> = { NI_DISABILITY: 'תביעת נכות לביטוח לאומי', REHAB_BASKET: 'תביעה לסל שיקום', HOUSING_ASSISTANCE: 'תביעה לסיוע בדיור' };
+export const needLabel: Record<string, string> = { EMPLOYMENT: 'תעסוקה', STUDIES: 'לימודים', RIGHTS: 'מיצוי זכויות', EMOTIONAL: 'רגשי נפשי', SOCIAL: 'חברתי', COMMUNITY: 'קהילתי', IDENTITY: 'זהותי', FAMILY: 'משפחתי' };
+export const responseLabel: Record<string, string> = {
+  CLUB_COURSES: 'מועדון וקורסים של צא ולמד', WORKSHOPS: 'השתתפות בסדנאות', SCHOLARSHIP_PROGRAM: 'תכנית מלגות לסטודנטים', SHABBAT_MEALS: 'סעודות שבת',
+  COMMUNITY_EVENTS: 'השתתפות באירועי קהילה', FAMILY_MEDIATION: 'גישור משפחתי', PSYCH_TREATMENT: 'שפ"ח', EXTERNAL_REFERRAL: 'תיווך הפניה למענים חיצוניים',
+};
 export const meetingActionLabel: Record<string, string> = {
-  NI_PROGRAM: 'כניסה לתכנית ביטוח לאומי', PSYCH_PROGRAM: 'כניסה לתכנית פסיכולוגית', SCHOLARSHIPS: 'מלגות לימודים', EMPLOYMENT: 'תעסוקה', EXTERNAL_PARTNER: 'קישור לגורם שת"פ חיצוני',
+  NI_PROGRAM: 'כניסה לתכנית ביטוח לאומי', PSYCH_PROGRAM: 'כניסה לשפ"ח', SCHOLARSHIPS: 'תיווך והתאמת מלגות לימודים', EMPLOYMENT: 'הכוונה לתעסוקה', EXTERNAL_PARTNER: 'קישור לגורם שת"פ חיצוני',
+  STUDY_GUIDANCE: 'הכוונה ללימודים', CLAIM: 'הגשת תביעה',
 };
 export const treatmentMeetingSubjectLabel: Record<string, string> = {
   FIT: 'מידת ההתאמה של המטפל', EARLY_END: 'בקשה לסיים לפני תום החוזה', CONSULT: 'התייעצות', EXTENSION_REQUEST: 'בקשת הארכת טיפול', OTHER: 'אחר',
@@ -188,3 +201,23 @@ export const DURATION_BANDS = [
 ] as const;
 export const durationBand = (minutes: number | null | undefined): number => (!minutes ? 60 : minutes <= 30 ? 30 : minutes < 60 ? 45 : minutes === 60 ? 60 : 90);
 export const durationLabel = (minutes: number | null | undefined): string => (minutes ? DURATION_BANDS.find((b) => b.value === durationBand(minutes))!.label : '—');
+
+// ======================= שלב א׳: סטטוס חבר, תלונות, גישור =======================
+export const memberStatusLabel: Record<string, string> = {
+  ACTIVE: 'פעיל', INACTIVE: 'לא פעיל', REMOVED_TEMP: 'מורחק זמנית', REMOVED_CONDITIONAL: 'מורחק על תנאי', REMOVED_PERMANENT: 'מורחק לצמיתות',
+};
+export const memberStatusTone = (s: string) => (({ ACTIVE: 'green', INACTIVE: 'gray', REMOVED_TEMP: 'red', REMOVED_CONDITIONAL: 'amber', REMOVED_PERMANENT: 'red' }) as Record<string, 'green' | 'gray' | 'red' | 'amber'>)[s] ?? 'gray';
+export const isRemoved = (s: string) => s.startsWith('REMOVED');
+export const removalKindLabel: Record<string, string> = { TEMPORARY: 'הרחקה זמנית', CONDITIONAL: 'הרחקה על תנאי', PERMANENT: 'הרחקה לצמיתות' };
+export const complaintStatusLabel: Record<string, string> = { NEW: 'חדשה', IN_PROGRESS: 'בטיפול', HANDLED: 'טופלה' };
+export const complaintStatusTone = (s: string) => (({ NEW: 'amber', IN_PROGRESS: 'blue', HANDLED: 'green' }) as Record<string, 'amber' | 'blue' | 'green'>)[s] ?? 'gray';
+export const entryKindLabel: Record<string, string> = { MEETING: 'פגישה', CALL: 'שיחה', MESSAGE: 'הודעה', NOTE: 'הערה' };
+export const complaintActionLabel: Record<string, string> = {
+  NONE: 'לא ננקטה פעולה', REMOVAL_PERMANENT: 'הרחקה לצמיתות', REMOVAL_CONDITIONAL: 'הרחקה על תנאי', REMOVAL_TEMPORARY: 'הרחקה זמנית', OTHER: 'פעולה אחרת',
+};
+export const parentLabel: Record<string, string> = { FATHER: 'אבא', MOTHER: 'אמא', OTHER: 'אחר' };
+export const withWhomLabel: Record<string, string> = { MEMBER: 'החבר', FATHER: 'אבא', MOTHER: 'אמא', OTHER: 'אחר' };
+export const mediationContactLabel: Record<string, string> = { CALL: 'שיחת טלפון', MEETING: 'פגישה', FUTURE_MEETING: 'פגישה עתידית', EXTERNAL_PARENTS_MEETING: 'מפגש הורים חיצוני' };
+export const workshopEventTypeLabel: Record<string, string> = {
+  REGULAR: 'אירוע רגיל', YODIT: 'החצר של יודית', STUDENT_DAY: 'יום סטודנטים', SCHOLARSHIP_FAIR: 'יריד מלגות', BUREAUCRACY: 'הפנינג בירוקרטיה', OTHER: 'סוג אחר',
+};
